@@ -4,6 +4,8 @@ import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
 
 import jakarta.persistence.*;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Represents a game session. When the host starts the game, the deck is
@@ -19,6 +21,19 @@ public class Game implements Serializable {
     @Id
     @GeneratedValue
     private Long id;
+
+    @ManyToMany
+    @JoinTable(
+            name = "game_players",
+            joinColumns = @JoinColumn(name = "game_id"),
+            inverseJoinColumns = @JoinColumn(name = "user_id")
+    )
+    private List<User> players = new ArrayList<>();
+
+    @Column(nullable = false)
+    private Long hostId;
+
+
 
     @Column(nullable = false, unique = true)
     private String lobbyCode;
@@ -69,4 +84,10 @@ public class Game implements Serializable {
 
     public int getDeckSize() { return deckSize; }
     public void setDeckSize(int deckSize) { this.deckSize = deckSize; }
+
+    public Long getHostId() { return hostId; }
+    public void setHostId(Long hostId) { this.hostId = hostId; }
+
+    public List<User> getPlayers() { return players; }
+    public void setPlayers(List<User> players) { this.players = players; }
 }

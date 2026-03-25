@@ -67,7 +67,9 @@ public class GameService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Game is already " + game.getStatus());
         }
-
+        if (game.getPlayers().size() < 2){
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Not enough players or settings incomplete");
+        }
         log.info("Starting game {} – fetching {} cards for era {}",
                 gameId, deckSize, game.getEra());
 
