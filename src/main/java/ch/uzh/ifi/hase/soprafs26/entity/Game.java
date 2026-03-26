@@ -33,8 +33,6 @@ public class Game implements Serializable {
     @Column(nullable = false)
     private Long hostId;
 
-
-
     @Column(nullable = false, unique = true)
     private String lobbyCode;
 
@@ -61,6 +59,10 @@ public class Game implements Serializable {
     /** Total number of cards in the deck (avoids deserialising just to count). */
     @Column(nullable = false)
     private int deckSize;
+
+    /** Ordered JSON array of successfully placed cards, sorted by year. **/
+    @Column(columnDefinition = "TEXT")
+    private String timelineJson;
 
     // Getters & setters
 
@@ -90,4 +92,7 @@ public class Game implements Serializable {
 
     public List<User> getPlayers() { return players; }
     public void setPlayers(List<User> players) { this.players = players; }
+
+    public String getTimelineJson() { return timelineJson; }
+    public void setTimelineJson(String timelineJson) { this.timelineJson = timelineJson; }
 }
