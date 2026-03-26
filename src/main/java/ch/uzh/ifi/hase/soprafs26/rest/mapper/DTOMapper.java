@@ -1,42 +1,63 @@
 package ch.uzh.ifi.hase.soprafs26.rest.mapper;
 
-import org.mapstruct.*;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.factory.Mappers;
+import org.mapstruct.BeanMapping;
 
 import ch.uzh.ifi.hase.soprafs26.entity.User;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.UserGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.UserPostDTO;
+
 import ch.uzh.ifi.hase.soprafs26.entity.EventCard;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.EventCardGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.EventCardRevealDTO;
+
 import ch.uzh.ifi.hase.soprafs26.entity.Game;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GameGetDTO;
+
+import ch.uzh.ifi.hase.soprafs26.entity.FriendRequest;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.FriendRequestGetDTO;
+
 /**
  * DTOMapper
  * This class is responsible for generating classes that will automatically
  * transform/map the internal representation
- * of an entity (e.g., the User) to the external/API representation (e.g.,
- * UserGetDTO for getting, UserPostDTO for creating)
- * and vice versa.
- * Additional mappers can be defined for new entities.
- * Always created one mapper for getting information (GET) and one mapper for
- * creating information (POST).
+ * of an entity to the external/API representation and vice versa.
  */
 @Mapper
 public interface DTOMapper {
 
-	DTOMapper INSTANCE = Mappers.getMapper(DTOMapper.class);
+    DTOMapper INSTANCE = Mappers.getMapper(DTOMapper.class);
 
-	@Mapping(source = "name", target = "name")
-	@Mapping(source = "username", target = "username")
-	User convertUserPostDTOtoEntity(UserPostDTO userPostDTO);
+    // User
+    @BeanMapping(ignoreByDefault = true)
+    @Mapping(source = "username", target = "username")
+    @Mapping(source = "password", target = "password")
+    User convertUserPostDTOtoEntity(UserPostDTO userPostDTO);
 
-	@Mapping(source = "id", target = "id")
-	@Mapping(source = "name", target = "name")
-	@Mapping(source = "username", target = "username")
-	@Mapping(source = "status", target = "status")
-	UserGetDTO convertEntityToUserGetDTO(User user);
+    @Mapping(source = "id", target = "id")
+    @Mapping(source = "username", target = "username")
+    @Mapping(source = "token", target = "token")
+    @Mapping(source = "status", target = "status")
+    @Mapping(source = "bio", target = "bio")
+    @Mapping(source = "creationDate", target = "creationDate")
+    @Mapping(source = "totalGamesPlayed", target = "totalGamesPlayed")
+    @Mapping(source = "totalWins", target = "totalWins")
+    @Mapping(source = "totalPoints", target = "totalPoints")
+    UserGetDTO convertEntityToUserGetDTO(User user);
 
+    // FriendRequest
+    @Mapping(source = "id", target = "id")
+    @Mapping(source = "sender.id", target = "senderId")
+    @Mapping(source = "sender.username", target = "senderUsername")
+    @Mapping(source = "receiver.id", target = "receiverId")
+    @Mapping(source = "receiver.username", target = "receiverUsername")
+    @Mapping(source = "status", target = "status")
+    @Mapping(source = "createdAt", target = "createdAt")
+    FriendRequestGetDTO convertEntityToFriendRequestGetDTO(FriendRequest friendRequest);
+
+    // EventCard
     @Mapping(source = "id", target = "id")
     @Mapping(source = "title", target = "title")
     @Mapping(source = "imageUrl", target = "imageUrl")
@@ -48,6 +69,7 @@ public interface DTOMapper {
     @Mapping(source = "imageUrl", target = "imageUrl")
     EventCardRevealDTO convertEntityToEventCardRevealDTO(EventCard eventCard);
 
+    // Game
     @Mapping(source = "id", target = "id")
     @Mapping(source = "lobbyCode", target = "lobbyCode")
     @Mapping(source = "era", target = "era")
