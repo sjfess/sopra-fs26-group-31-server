@@ -8,6 +8,7 @@ public class GameGetDTO {
     private String status;
     private int deckSize;
     private int cardsRemaining;
+    private int timelineSize;
 
     // Getters & setters
 
@@ -28,4 +29,8 @@ public class GameGetDTO {
 
     public int getCardsRemaining() { return cardsRemaining; }
     public void setCardsRemaining(int cardsRemaining) { this.cardsRemaining = cardsRemaining; }
+
+    public int getTimelineSize() { return timelineSize; }
+    public void setTimelineSize(int timelineSize) { this.timelineSize = timelineSize; }
+
 }
