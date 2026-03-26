@@ -14,6 +14,12 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import ch.uzh.ifi.hase.soprafs26.entity.User;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 
 /**
  * Game Controller
@@ -39,17 +45,50 @@ public class GameController {
     // 1.) Create game
 
     /**
-     * POST /games?era=MEDIEVAL
+     * POST /games
+     * Body: { "hostId": <long> }
      *
      * Creates a new game in WAITING status and returns the lobby info.
      */
     @PostMapping("/games")
     @ResponseStatus(HttpStatus.CREATED)
     @ResponseBody
-    public GameGetDTO createGame(@RequestParam("era") HistoricalEra era) {
-        Game game = gameService.createGame(era);
+    public GameGetDTO createGame(@RequestBody Map<String, Long> body) {
+        Game game = gameService.createGame(body.get("hostId"));
         return toGameGetDTO(game);
     }
+
+    // 1b.) Join game
+
+    /**
+     * PUT /games/{gameId}/join
+     * Body: { "userId": <long> }
+     *
+     * Adds a player to a WAITING lobby.
+     */
+    @PutMapping("/games/{gameId}/join")
+    @ResponseStatus(HttpStatus.OK)
+    @ResponseBody
+    public GameGetDTO joinGame(@PathVariable Long gameId, @RequestBody Map<String, Long> body) {
+        Game game = gameService.joinGame(gameId, body.get("userId"));
+        return toGameGetDTO(game);
+    }
+
+    // 1c.) Leave game
+
+    /**
+     * PUT /games/{gameId}/leave
+     * Body: { "userId": <long> }
+     *
+     * Removes a player from the game session.
+     */
+    @PutMapping("/games/{gameId}/leave")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void leaveGame(@PathVariable Long gameId, @RequestBody Map<String, Long> body) {
+        gameService.leaveGame(gameId, body.get("userId"));
+    }
+    
+    
 
     // 2.) Start game
 
@@ -148,6 +187,7 @@ public class GameController {
     private GameGetDTO toGameGetDTO(Game game) {
         GameGetDTO dto = DTOMapper.INSTANCE.convertEntityToGameGetDTO(game);
         dto.setCardsRemaining(game.getDeckSize() - game.getNextCardIndex());
+        dto.setPlayerIds(game.getPlayers().stream().map(User::getId).collect(Collectors.toList()));
         return dto;
     }
 }

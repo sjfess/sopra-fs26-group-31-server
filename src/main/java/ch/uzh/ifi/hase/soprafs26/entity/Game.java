@@ -4,6 +4,8 @@ import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
 
 import jakarta.persistence.*;
 import java.io.Serializable;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Represents a game session. When the host starts the game, the deck is
@@ -47,6 +49,19 @@ public class Game implements Serializable {
     @Column(nullable = false)
     private int deckSize;
 
+    /** The user ID of the host who created the game. */
+    @Column(nullable = false)
+    private Long hostId;
+
+    /** Players currently in the lobby. */
+    @ManyToMany
+    @JoinTable(
+            name = "game_players",
+            joinColumns = @JoinColumn(name = "game_id"),
+            inverseJoinColumns = @JoinColumn(name = "user_id")
+    )
+    private Set<ch.uzh.ifi.hase.soprafs26.entity.User> players = new HashSet<>();
+
     // Getters & setters
 
     public Long getId() { return id; }
@@ -69,4 +84,10 @@ public class Game implements Serializable {
 
     public int getDeckSize() { return deckSize; }
     public void setDeckSize(int deckSize) { this.deckSize = deckSize; }
+
+    public Long getHostId() { return hostId; }
+    public void setHostId(Long hostId) { this.hostId = hostId; }
+
+    public Set<ch.uzh.ifi.hase.soprafs26.entity.User> getPlayers() { return players; }
+    public void setPlayers(Set<ch.uzh.ifi.hase.soprafs26.entity.User> players) { this.players = players; }
 }

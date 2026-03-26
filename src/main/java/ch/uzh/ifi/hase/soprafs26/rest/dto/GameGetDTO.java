@@ -1,5 +1,7 @@
 package ch.uzh.ifi.hase.soprafs26.rest.dto;
 
+import java.util.List;
+
 public class GameGetDTO {
 
     private Long id;
@@ -8,6 +10,8 @@ public class GameGetDTO {
     private String status;
     private int deckSize;
     private int cardsRemaining;
+    private Long hostId;
+    private List<Long> playerIds;
 
     // Getters & setters
 
@@ -28,4 +32,10 @@ public class GameGetDTO {
 
     public int getCardsRemaining() { return cardsRemaining; }
     public void setCardsRemaining(int cardsRemaining) { this.cardsRemaining = cardsRemaining; }
+
+    public Long getHostId() { return hostId; }
+    public void setHostId(Long hostId) { this.hostId = hostId; }
+
+    public List<Long> getPlayerIds() { return playerIds; }
+    public void setPlayerIds(List<Long> playerIds) { this.playerIds = playerIds; }
 }
