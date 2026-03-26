@@ -54,5 +54,6 @@ public interface DTOMapper {
     @Mapping(source = "status", target = "status")
     @Mapping(source = "deckSize", target = "deckSize")
     @Mapping(target = "cardsRemaining", ignore = true)
+    @Mapping(target = "timelineSize", ignore = true)
     GameGetDTO convertEntityToGameGetDTO(Game game);
 }
