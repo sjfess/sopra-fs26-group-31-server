@@ -8,6 +8,7 @@ import ch.uzh.ifi.hase.soprafs26.rest.dto.EventCardRevealDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GameGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.mapper.DTOMapper;
 import ch.uzh.ifi.hase.soprafs26.service.GameService;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.PlacementResultDTO;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -26,12 +27,15 @@ import java.util.stream.Collectors;
  * Handles REST requests for game session lifecycle and card operations.
  *
  * Flow:
- *   1. POST /games?era=MEDIEVAL             → create game (returns lobby code)
- *   2. PUT  /games/{gameId}/start?deckSize=30 → host starts → deck fetched once
- *   3. POST /games/{gameId}/draw             → draw next card (hidden year)
- *   4. GET  /games/{gameId}/cards/{index}     → reveal a specific card (year shown)
- *   5. GET  /games/{gameId}                   → game info (status, cards remaining)
- *   6. GET  /games/{gameId}/cards             → all cards revealed (debug/endgame)
+ *   1. POST /games?era=MEDIEVAL                            -> create game (returns lobby code)
+ *   2. PUT  /games/{gameId}/start?deckSize=30              -> host starts → deck fetched once
+ *   3. POST /games/{gameId}/draw                           -> draw next card (hidden year)
+ *   4. GET  /games/{gameId}/cards/{index}                  -> reveal a specific card (year shown)
+ *   5. GET  /games/{gameId}                                -> game info (status, cards remaining)
+ *   6. GET  /games/{gameId}/cards                          -> all cards revealed (debug/endgame)
+ *   7. POST /games/{gameId}/place?cardIndex=3&position=1   -> places card on the timeline, cardIndex is from deck,
+ *                                                             position is where in the timeline
+ *   8. GET /games/{gameId}/timeline                        -> returns current cards on timeline
  */
 @RestController
 public class GameController {
@@ -104,7 +108,7 @@ public class GameController {
     @ResponseBody
     public GameGetDTO startGame(
             @PathVariable Long gameId,
-            @RequestParam(value = "deckSize", defaultValue = "30") int deckSize) {
+            @RequestParam(value = "deckSize", defaultValue = "40") int deckSize) {
         Game game = gameService.startGame(gameId, deckSize);
         return toGameGetDTO(game);
     }
@@ -178,6 +182,54 @@ public class GameController {
         return dtos;
     }
 
+    /**
+     * POST /games/{gameId}/place?cardIndex=3&position=1
+     *
+     * Returns whether the placement was correct, the card's year,
+     * and the updated timeline size.
+     */
+    @PostMapping("/games/{gameId}/place")
+    @ResponseStatus(HttpStatus.OK)
+    @ResponseBody
+    public PlacementResultDTO placeCard(
+            @PathVariable Long gameId,
+            @RequestParam("cardIndex") int cardIndex,
+            @RequestParam("position") int position) {
+
+        Object[] result = gameService.placeCard(gameId, cardIndex, position);
+        EventCard card = (EventCard) result[0];
+        boolean correct = (boolean) result[1];
+        int timelineSize = (int) result[2];
+
+        PlacementResultDTO dto = new PlacementResultDTO();
+        dto.setCorrect(correct);
+        dto.setTitle(card.getTitle());
+        dto.setYear(card.getYear());
+        dto.setImageUrl(card.getImageUrl());
+        dto.setTimelineSize(timelineSize);
+        return dto;
+    }
+
+    // 8.) Get current timeline
+
+    /**
+     * GET /games/{gameId}/timeline
+     *
+     * Returns all cards currently on the timeline, in chronological order,
+     * with years visible.
+     */
+    @GetMapping("/games/{gameId}/timeline")
+    @ResponseStatus(HttpStatus.OK)
+    @ResponseBody
+    public List<EventCardRevealDTO> getTimeline(@PathVariable Long gameId) {
+        List<EventCard> timeline = gameService.getTimeline(gameId);
+        List<EventCardRevealDTO> dtos = new ArrayList<>();
+        for (EventCard card : timeline) {
+            dtos.add(DTOMapper.INSTANCE.convertEntityToEventCardRevealDTO(card));
+        }
+        return dtos;
+    }
+
     // Helper-functions
 
     /**
@@ -188,6 +240,8 @@ public class GameController {
         GameGetDTO dto = DTOMapper.INSTANCE.convertEntityToGameGetDTO(game);
         dto.setCardsRemaining(game.getDeckSize() - game.getNextCardIndex());
         dto.setPlayerIds(game.getPlayers().stream().map(User::getId).collect(Collectors.toList()));
+        List<EventCard> timeline = gameService.getTimeline(game.getId());
+        dto.setTimelineSize(timeline.size());
         return dto;
     }
 }

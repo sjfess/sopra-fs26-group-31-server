@@ -53,6 +53,7 @@ public class GameService {
         game.setDeckSize(0);
         game.setHostId(hostId);
         game.getPlayers().add(host);
+        game.setTimelineJson("[]");
 
         game = gameRepository.save(game);
         log.info("Created game {} with lobby code {} hosted by user {}", game.getId(), game.getLobbyCode(), hostId);
@@ -113,7 +114,9 @@ public class GameService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Game is already " + game.getStatus());
         }
-
+        if (game.getPlayers().size() < 2){
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Not enough players or settings incomplete");
+        }
         log.info("Starting game {} – fetching {} cards for era {}",
                 gameId, deckSize, game.getEra());
 
@@ -123,6 +126,7 @@ public class GameService {
         game.setDeckSize(deck.size());
         game.setNextCardIndex(0);
         game.setStatus("IN_PROGRESS");
+        game.setTimelineJson("[]");
 
         game = gameRepository.save(game);
         log.info("Game {} started with {} cards", gameId, deck.size());
@@ -335,6 +339,67 @@ public class GameService {
                 .replace("\\n", "\n")
                 .replace("\\r", "\r")
                 .replace("\\t", "\t");
+    }
+
+    public Object[] placeCard(Long gameId, int cardIndex, int position) {
+        Game game = findGameOrThrow(gameId);
+        assertInProgress(game);
+
+        // Get card from deck
+        List<EventCard> deck = deserializeDeck(game.getDeckJson());
+        if (cardIndex < 0 || cardIndex >= deck.size()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "Card index " + cardIndex + " out of range");
+        }
+        EventCard card = deck.get(cardIndex);
+
+        // Load current timeline
+        List<EventCard> timeline = deserializeDeck(game.getTimelineJson());
+
+        // Validate position
+        if (position < 0 || position > timeline.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Position " + position + " out of range (timeline has " + timeline.size() + " cards)");
+        }
+
+        // Check chronological correctness:
+        // - Card must have year >= the card before it (if any)
+        // - Card must have year <= the card after it (if any)
+        boolean correct = true;
+
+        if (position > 0) {
+            EventCard before = timeline.get(position - 1);
+            if (card.getYear() < before.getYear()) {
+                correct = false;
+            }
+        }
+        if (correct && position < timeline.size()) {
+            EventCard after = timeline.get(position);
+            if (card.getYear() > after.getYear()) {
+                correct = false;
+            }
+        }
+
+        if (correct) {
+            // Insert into timeline at the specified position
+            timeline.add(position, card);
+            game.setTimelineJson(serializeDeck(timeline));
+        }
+        // If incorrect: card is discarded (not added to timeline)
+
+        gameRepository.save(game);
+
+        log.info("Game {} – card '{}' ({}) placed at position {}: {}",
+                gameId, card.getTitle(), card.getYear(), position,
+                correct ? "CORRECT" : "WRONG");
+
+        return new Object[]{ card, correct, timeline.size() };
+    }
+
+    // Returns the current timeline (all placed cards with years visible)
+    public List<EventCard> getTimeline(Long gameId) {
+        Game game = findGameOrThrow(gameId);
+        return deserializeDeck(game.getTimelineJson());
     }
 
     // Helper-functions

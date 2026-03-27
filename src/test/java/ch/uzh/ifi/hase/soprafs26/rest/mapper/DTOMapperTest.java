@@ -1,51 +1,52 @@
 package ch.uzh.ifi.hase.soprafs26.rest.mapper;
 
-import org.junit.jupiter.api.Test;
-
 import ch.uzh.ifi.hase.soprafs26.constant.UserStatus;
 import ch.uzh.ifi.hase.soprafs26.entity.User;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.UserGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.UserPostDTO;
+import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-/**
- * DTOMapperTest
- * Tests if the mapping between the internal and the external/API representation
- * works.
- */
 public class DTOMapperTest {
-	@Test
-	public void testCreateUser_fromUserPostDTO_toUser_success() {
-		// create UserPostDTO
-		UserPostDTO userPostDTO = new UserPostDTO();
-		userPostDTO.setName("name");
-		userPostDTO.setUsername("username");
 
-		// MAP -> Create user
-		User user = DTOMapper.INSTANCE.convertUserPostDTOtoEntity(userPostDTO);
+    @Test
+    public void testCreateUser_fromUserPostDTO_toUser_success() {
+        UserPostDTO userPostDTO = new UserPostDTO();
+        userPostDTO.setUsername("username");
+        userPostDTO.setPassword("password");
 
-		// check content
-		assertEquals(userPostDTO.getName(), user.getName());
-		assertEquals(userPostDTO.getUsername(), user.getUsername());
-	}
+        User user = DTOMapper.INSTANCE.convertUserPostDTOtoEntity(userPostDTO);
 
-	@Test
-	public void testGetUser_fromUser_toUserGetDTO_success() {
-		// create User
-		User user = new User();
-		user.setName("Firstname Lastname");
-		user.setUsername("firstname@lastname");
-		user.setStatus(UserStatus.OFFLINE);
-		user.setToken("1");
+        assertEquals(userPostDTO.getUsername(), user.getUsername());
+        assertEquals(userPostDTO.getPassword(), user.getPassword());
+    }
 
-		// MAP -> Create UserGetDTO
-		UserGetDTO userGetDTO = DTOMapper.INSTANCE.convertEntityToUserGetDTO(user);
+    @Test
+    public void testGetUser_fromUser_toUserGetDTO_success() {
+        User user = new User();
+        user.setId(1L);
+        user.setUsername("firstname@lastname");
+        user.setToken("1");
+        user.setStatus(UserStatus.OFFLINE);
+        user.setBio("bio");
+        user.setCreationDate(Instant.parse("2026-03-01T10:15:30Z"));
+        user.setTotalGamesPlayed(7);
+        user.setTotalWins(5);
+        user.setTotalPoints(42);
 
-		// check content
-		assertEquals(user.getId(), userGetDTO.getId());
-		assertEquals(user.getName(), userGetDTO.getName());
-		assertEquals(user.getUsername(), userGetDTO.getUsername());
-		assertEquals(user.getStatus(), userGetDTO.getStatus());
-	}
+        UserGetDTO userGetDTO = DTOMapper.INSTANCE.convertEntityToUserGetDTO(user);
+
+        assertEquals(user.getId(), userGetDTO.getId());
+        assertEquals(user.getUsername(), userGetDTO.getUsername());
+        assertEquals(user.getToken(), userGetDTO.getToken());
+        assertEquals(user.getStatus(), userGetDTO.getStatus());
+        assertEquals(user.getBio(), userGetDTO.getBio());
+        assertEquals(user.getCreationDate(), userGetDTO.getCreationDate());
+        assertEquals(user.getTotalGamesPlayed(), userGetDTO.getTotalGamesPlayed());
+        assertEquals(user.getTotalWins(), userGetDTO.getTotalWins());
+        assertEquals(user.getTotalPoints(), userGetDTO.getTotalPoints());
+    }
 }

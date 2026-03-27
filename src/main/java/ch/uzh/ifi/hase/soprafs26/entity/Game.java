@@ -6,6 +6,8 @@ import jakarta.persistence.*;
 import java.io.Serializable;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Represents a game session. When the host starts the game, the deck is
@@ -21,6 +23,17 @@ public class Game implements Serializable {
     @Id
     @GeneratedValue
     private Long id;
+
+    @ManyToMany
+    @JoinTable(
+            name = "game_players",
+            joinColumns = @JoinColumn(name = "game_id"),
+            inverseJoinColumns = @JoinColumn(name = "user_id")
+    )
+    private List<User> players = new ArrayList<>();
+
+    @Column(nullable = false)
+    private Long hostId;
 
     @Column(nullable = false, unique = true)
     private String lobbyCode;
@@ -53,14 +66,10 @@ public class Game implements Serializable {
     @Column(nullable = false)
     private Long hostId;
 
-    /** Players currently in the lobby. */
-    @ManyToMany
-    @JoinTable(
-            name = "game_players",
-            joinColumns = @JoinColumn(name = "game_id"),
-            inverseJoinColumns = @JoinColumn(name = "user_id")
-    )
-    private Set<ch.uzh.ifi.hase.soprafs26.entity.User> players = new HashSet<>();
+    /** Ordered JSON array of successfully placed cards, sorted by year. **/
+    @Column(columnDefinition = "TEXT")
+    private String timelineJson;
+
 
     // Getters & setters
 
@@ -88,6 +97,10 @@ public class Game implements Serializable {
     public Long getHostId() { return hostId; }
     public void setHostId(Long hostId) { this.hostId = hostId; }
 
-    public Set<ch.uzh.ifi.hase.soprafs26.entity.User> getPlayers() { return players; }
-    public void setPlayers(Set<ch.uzh.ifi.hase.soprafs26.entity.User> players) { this.players = players; }
+    public List<User> getPlayers() { return players; }
+    public void setPlayers(List<User> players) { this.players = players; }
+
+    public String getTimelineJson() { return timelineJson; }
+    public void setTimelineJson(String timelineJson) { this.timelineJson = timelineJson; }
+
 }

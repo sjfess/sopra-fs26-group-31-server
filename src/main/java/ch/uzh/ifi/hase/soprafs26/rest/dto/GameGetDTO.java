@@ -12,6 +12,7 @@ public class GameGetDTO {
     private int cardsRemaining;
     private Long hostId;
     private List<Long> playerIds;
+    private int timelineSize;
 
     // Getters & setters
 
@@ -38,4 +39,9 @@ public class GameGetDTO {
 
     public List<Long> getPlayerIds() { return playerIds; }
     public void setPlayerIds(List<Long> playerIds) { this.playerIds = playerIds; }
+  
+    public int getTimelineSize() { return timelineSize; }
+    public void setTimelineSize(int timelineSize) { this.timelineSize = timelineSize; }
+
+
 }
