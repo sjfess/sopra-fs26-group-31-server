@@ -24,13 +24,9 @@ public class Game implements Serializable {
     @GeneratedValue
     private Long id;
 
-    @ManyToMany
-    @JoinTable(
-            name = "game_players",
-            joinColumns = @JoinColumn(name = "game_id"),
-            inverseJoinColumns = @JoinColumn(name = "user_id")
-    )
-    private List<User> players = new ArrayList<>();
+
+    @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<GamePlayer> gamePlayers = new ArrayList<>();
 
     @Column(nullable = false)
     private Long hostId;
@@ -97,9 +93,13 @@ public class Game implements Serializable {
     public Long getHostId() { return hostId; }
     public void setHostId(Long hostId) { this.hostId = hostId; }
 
-    public List<User> getPlayers() { return players; }
-    public void setPlayers(List<User> players) { this.players = players; }
+    public List<GamePlayer> getGamePlayers() {
+        return gamePlayers;
+    }
 
+    public void setGamePlayers(List<GamePlayer> gamePlayers) {
+        this.gamePlayers = gamePlayers;
+    }
     public String getTimelineJson() { return timelineJson; }
     public void setTimelineJson(String timelineJson) { this.timelineJson = timelineJson; }
 
