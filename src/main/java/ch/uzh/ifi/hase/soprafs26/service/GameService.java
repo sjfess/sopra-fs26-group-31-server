@@ -3,7 +3,9 @@ package ch.uzh.ifi.hase.soprafs26.service;
 import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
 import ch.uzh.ifi.hase.soprafs26.entity.EventCard;
 import ch.uzh.ifi.hase.soprafs26.entity.Game;
+import ch.uzh.ifi.hase.soprafs26.entity.User;
 import ch.uzh.ifi.hase.soprafs26.repository.GameRepository;
+import ch.uzh.ifi.hase.soprafs26.repository.UserRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,11 +27,13 @@ public class GameService {
     private static final Logger log = LoggerFactory.getLogger(GameService.class);
 
     private final GameRepository gameRepository;
+    private final UserRepository userRepository;
     private final WikidataService wikidataService;
     private final Random random = new Random();
 
-    public GameService(GameRepository gameRepository, WikidataService wikidataService) {
+    public GameService(GameRepository gameRepository, UserRepository userRepository, WikidataService wikidataService) {
         this.gameRepository = gameRepository;
+        this.userRepository = userRepository;
         this.wikidataService = wikidataService;
     }
 
@@ -37,20 +41,62 @@ public class GameService {
 
     /**
      * Creates a new game in WAITING status with a random 6-char lobby code.
+     * The host is added as the first player.
      */
-    public Game createGame(HistoricalEra era) {
+    public Game createGame(Long hostId) {
+        User host = findUserOrThrow(hostId);
+
         Game game = new Game();
         game.setLobbyCode(generateLobbyCode());
-        game.setEra(era);
         game.setStatus("WAITING");
         game.setNextCardIndex(0);
         game.setDeckSize(0);
+        game.setHostId(hostId);
+        game.getPlayers().add(host);
         game.setTimelineJson("[]");
 
         game = gameRepository.save(game);
-        log.info("Created game {} with lobby code {} for era {}",
-                game.getId(), game.getLobbyCode(), era);
+        log.info("Created game {} with lobby code {} hosted by user {}", game.getId(), game.getLobbyCode(), hostId);
         return game;
+    }
+
+    /**
+     * Adds a player to a WAITING game lobby.
+     */
+    public Game joinGame(Long gameId, Long userId) {
+        Game game = findGameOrThrow(gameId);
+
+        if (!"WAITING".equals(game.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Game is already " + game.getStatus());
+        }
+
+        User user = findUserOrThrow(userId);
+
+        if (game.getPlayers().contains(user)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "User is already in this game");
+        }
+
+        game.getPlayers().add(user);
+        game = gameRepository.save(game);
+        log.info("User {} joined game {}", userId, gameId);
+        return game;
+    }
+
+    /**
+     * Removes a player from a game lobby.
+     */
+    public void leaveGame(Long gameId, Long userId) {
+        Game game = findGameOrThrow(gameId);
+        User user = findUserOrThrow(userId);
+
+        if (!game.getPlayers().contains(user)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User is not in this game");
+        }
+
+        game.getPlayers().remove(user);
+        gameRepository.save(game);
+        log.info("User {} left game {}", userId, gameId);
     }
 
     /**
@@ -362,6 +408,12 @@ public class GameService {
         return gameRepository.findById(gameId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Game " + gameId + " not found"));
+    }
+
+    private User findUserOrThrow(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User " + userId + " not found"));
     }
 
     private void assertInProgress(Game game) {

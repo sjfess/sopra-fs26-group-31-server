@@ -4,6 +4,8 @@ import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
 
 import jakarta.persistence.*;
 import java.io.Serializable;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -60,9 +62,14 @@ public class Game implements Serializable {
     @Column(nullable = false)
     private int deckSize;
 
+    /** The user ID of the host who created the game. */
+    @Column(nullable = false)
+    private Long hostId;
+
     /** Ordered JSON array of successfully placed cards, sorted by year. **/
     @Column(columnDefinition = "TEXT")
     private String timelineJson;
+
 
     // Getters & setters
 
@@ -95,4 +102,5 @@ public class Game implements Serializable {
 
     public String getTimelineJson() { return timelineJson; }
     public void setTimelineJson(String timelineJson) { this.timelineJson = timelineJson; }
+
 }
