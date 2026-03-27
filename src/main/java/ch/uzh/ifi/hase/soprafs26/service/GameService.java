@@ -484,4 +484,26 @@ public class GameService {
         }
         return code.toString();
     }
+
+    public void leaveGame(String lobbyCode, Long userId) {
+        Game game = gameRepository.findByLobbyCode(lobbyCode)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Game with lobby code " + lobbyCode + " not found"));
+
+        if (!"WAITING".equals(game.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Cannot leave a game that is already " + game.getStatus());
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User with id " + userId + " was not found"));
+
+        if (!gamePlayerRepository.existsByGameAndUser(game, user)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "User is not part of this game");
+        }
+
+        gamePlayerRepository.deleteByGameAndUser(game, user);
+    }
 }

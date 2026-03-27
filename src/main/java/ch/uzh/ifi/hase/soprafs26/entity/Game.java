@@ -28,8 +28,6 @@ public class Game implements Serializable {
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<GamePlayer> gamePlayers = new ArrayList<>();
 
-    @Column(nullable = false)
-    private Long hostId;
 
     @Column(nullable = false, unique = true)
     private String lobbyCode;
