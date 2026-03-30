@@ -34,6 +34,12 @@ public class GamePlayer implements Serializable {
     @Column(nullable = false)
     private Boolean activeTurn = false;
 
+    @Column(nullable = false)
+    private Integer correctPlacements = 0;
+
+    @Column(nullable = false)
+    private Integer incorrectPlacements = 0;
+
     public Long getId() {
         return id;
     }
@@ -88,5 +94,21 @@ public class GamePlayer implements Serializable {
 
     public void setCurrentCardIndex(Integer currentCardIndex) {
         this.currentCardIndex = currentCardIndex;
+    }
+
+    public Integer getCorrectPlacements() {
+        return correctPlacements;
+    }
+
+    public void setCorrectPlacements(Integer correctPlacements) {
+        this.correctPlacements = correctPlacements;
+    }
+
+    public Integer getIncorrectPlacements() {
+        return incorrectPlacements;
+    }
+
+    public void setIncorrectPlacements(Integer incorrectPlacements) {
+        this.incorrectPlacements = incorrectPlacements;
     }
 }
