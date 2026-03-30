@@ -20,7 +20,8 @@ public class UserRepositoryIntegrationTest {
     public void findByUsername_success() {
         User user = new User();
         user.setUsername("firstname@lastname");
-        user.setPassword("secret");
+        user.setPassword("hashed-secret");
+        user.setSalt("salt-1");
         user.setStatus(UserStatus.OFFLINE);
         user.setToken("token-1");
         user.setBio("bio");
@@ -39,6 +40,7 @@ public class UserRepositoryIntegrationTest {
         assertNotNull(found.getId());
         assertEquals(user.getUsername(), found.getUsername());
         assertEquals(user.getPassword(), found.getPassword());
+        assertEquals(user.getSalt(), found.getSalt());
         assertEquals(user.getToken(), found.getToken());
         assertEquals(user.getStatus(), found.getStatus());
         assertEquals(user.getBio(), found.getBio());
@@ -48,7 +50,8 @@ public class UserRepositoryIntegrationTest {
     public void findByToken_success() {
         User user = new User();
         user.setUsername("user2");
-        user.setPassword("secret");
+        user.setPassword("hashed-secret");
+        user.setSalt("salt-2");
         user.setStatus(UserStatus.ONLINE);
         user.setToken("token-2");
         user.setBio("bio2");
@@ -66,5 +69,6 @@ public class UserRepositoryIntegrationTest {
         assertNotNull(found);
         assertEquals(user.getUsername(), found.getUsername());
         assertEquals(user.getToken(), found.getToken());
+        assertEquals(user.getSalt(), found.getSalt());
     }
 }
