@@ -14,6 +14,8 @@ import ch.uzh.ifi.hase.soprafs26.service.GameService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -154,4 +156,12 @@ public class GameController {
         dto.setTimelineSize(timeline.size());
         return dto;
     }
+
+    @PostMapping("/games/{gameId}/finalize")
+    @ResponseStatus(HttpStatus.OK)
+    @ResponseBody
+    public List<FinalResultDTO> finalizeGame(@PathVariable Long gameId) {
+        return gameService.finalizeGame(gameId);
+    }
+
 }
