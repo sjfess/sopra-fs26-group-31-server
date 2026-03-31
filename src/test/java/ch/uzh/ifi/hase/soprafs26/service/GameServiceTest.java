@@ -100,6 +100,8 @@ public class GameServiceTest {
         assertTrue(gp1.getActiveTurn());
         assertEquals(0, gp2.getScore());
         assertFalse(gp2.getActiveTurn());
+        assertNotNull(gp1.getTurnStartedAt(), "First player's turn timer must be set on game start");
+        assertNull(gp2.getTurnStartedAt(), "Non-active players must not have a turn timer");
     }
 
     @Test

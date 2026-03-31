@@ -3,6 +3,7 @@ package ch.uzh.ifi.hase.soprafs26.entity;
 import jakarta.persistence.*;
 
 import java.io.Serializable;
+import java.time.Instant;
 
 @Entity
 @Table(name = "game_player")
@@ -34,6 +35,8 @@ public class GamePlayer implements Serializable {
     @Column(nullable = false)
     private Boolean activeTurn = false;
 
+    @Column
+    private Instant turnStartedAt;
     @Column(nullable = false)
     private Integer correctPlacements = 0;
 
@@ -96,6 +99,10 @@ public class GamePlayer implements Serializable {
         this.currentCardIndex = currentCardIndex;
     }
 
+    public Instant getTurnStartedAt() { return turnStartedAt; }
+  
+    public void setTurnStartedAt(Instant turnStartedAt) { this.turnStartedAt = turnStartedAt; }
+  
     public Integer getCorrectPlacements() {
         return correctPlacements;
     }
