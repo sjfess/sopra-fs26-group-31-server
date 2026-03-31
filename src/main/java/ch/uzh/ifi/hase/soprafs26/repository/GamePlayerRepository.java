@@ -23,4 +23,6 @@ public interface GamePlayerRepository extends JpaRepository<GamePlayer, Long> {
     boolean existsByGameAndUser(Game game, User user);
 
     void deleteByGameAndUser(Game game, User user);
+
+    List<GamePlayer> findByActiveTurnTrue();
 }

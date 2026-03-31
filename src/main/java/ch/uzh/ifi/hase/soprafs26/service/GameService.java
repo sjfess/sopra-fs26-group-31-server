@@ -12,9 +12,12 @@ import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -126,7 +129,12 @@ public class GameService {
         for (int i = 0; i < gamePlayers.size(); i++) {
             GamePlayer gamePlayer = gamePlayers.get(i);
             gamePlayer.setScore(0);
-            gamePlayer.setActiveTurn(i == 0);
+            if (i == 0) {
+                gamePlayer.setActiveTurn(true);
+                gamePlayer.setTurnStartedAt(Instant.now());
+            } else {
+                gamePlayer.setActiveTurn(false);
+            }
             gamePlayer.setCurrentCardIndex(null);
             gamePlayerRepository.save(gamePlayer);
         }
@@ -161,6 +169,7 @@ public class GameService {
         }
 
         activePlayer.setCurrentCardIndex(index);
+        activePlayer.setTurnStartedAt(Instant.now()); // reset timer when new card is drawn
         gamePlayerRepository.save(activePlayer);
 
         game.setNextCardIndex(index + 1);
@@ -460,6 +469,7 @@ public class GameService {
         int nextIndex = (currentIndex + 1) % players.size();
         GamePlayer nextPlayer = players.get(nextIndex);
         nextPlayer.setActiveTurn(true);
+        nextPlayer.setTurnStartedAt(Instant.now());
         gamePlayerRepository.save(nextPlayer);
     }
 
@@ -505,5 +515,30 @@ public class GameService {
         }
 
         gamePlayerRepository.deleteByGameAndUser(game, user);
+    }
+
+    @Scheduled(fixedDelay = 5000) // runs every 5 seconds
+    public void checkTurnTimeouts() {
+        long turnLimitSeconds = 30; // configure as needed
+
+        List<GamePlayer> activePlayers = gamePlayerRepository.findByActiveTurnTrue();
+
+        for (GamePlayer player : activePlayers) {
+            if (player.getTurnStartedAt() == null) continue;
+
+            Game game = player.getGame();
+            if (!"IN_PROGRESS".equals(game.getStatus())) continue;
+
+            long elapsed = Duration.between(player.getTurnStartedAt(), Instant.now()).getSeconds();
+
+            if (elapsed >= turnLimitSeconds) {
+                log.info("Turn timeout for player {} in game {}",
+                        player.getUser().getUsername(), game.getId());
+
+                // Advance to next player
+                advanceTurn(game, player);
+                gameRepository.save(game);
+            }
+        }
     }
 }
