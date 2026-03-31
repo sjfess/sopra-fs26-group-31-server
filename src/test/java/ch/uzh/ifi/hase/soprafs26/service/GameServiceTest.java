@@ -9,6 +9,7 @@ import ch.uzh.ifi.hase.soprafs26.entity.User;
 import ch.uzh.ifi.hase.soprafs26.repository.GamePlayerRepository;
 import ch.uzh.ifi.hase.soprafs26.repository.GameRepository;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -573,4 +574,151 @@ public class GameServiceTest {
 
         assertNull(gp1.getCurrentCardIndex());
     }
+
+    @Test
+    public void finalizeGame_validGame_updatesUserAggregatesAndReturnsResults() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+
+        User user1 = new User();
+        user1.setId(10L);
+        user1.setUsername("alex");
+        user1.setTotalGamesPlayed(2);
+        user1.setTotalWins(1);
+        user1.setTotalPoints(20);
+        user1.setTotalCorrectPlacements(5);
+        user1.setTotalIncorrectPlacements(2);
+
+        User user2 = new User();
+        user2.setId(11L);
+        user2.setUsername("mia");
+        user2.setTotalGamesPlayed(3);
+        user2.setTotalWins(2);
+        user2.setTotalPoints(30);
+        user2.setTotalCorrectPlacements(7);
+        user2.setTotalIncorrectPlacements(1);
+
+        GamePlayer gp1 = new GamePlayer();
+        gp1.setId(100L);
+        gp1.setGame(game);
+        gp1.setUser(user1);
+        gp1.setScore(5);
+        gp1.setCorrectPlacements(5);
+        gp1.setIncorrectPlacements(1);
+
+        GamePlayer gp2 = new GamePlayer();
+        gp2.setId(101L);
+        gp2.setGame(game);
+        gp2.setUser(user2);
+        gp2.setScore(3);
+        gp2.setCorrectPlacements(3);
+        gp2.setIncorrectPlacements(2);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findAllByGameOrderByScoreDescTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<FinalResultDTO> results = gameService.finalizeGame(1L);
+
+        assertEquals(2, results.size());
+
+        assertEquals("alex", results.get(0).getUsername());
+        assertEquals(5, results.get(0).getScore());
+        assertEquals(5, results.get(0).getCorrectPlacements());
+        assertEquals(1, results.get(0).getIncorrectPlacements());
+        assertTrue(results.get(0).getWinner());
+
+        assertEquals("mia", results.get(1).getUsername());
+        assertEquals(3, results.get(1).getScore());
+        assertFalse(results.get(1).getWinner());
+
+        assertEquals("FINISHED", game.getStatus());
+
+        assertEquals(3, user1.getTotalGamesPlayed());
+        assertEquals(2, user1.getTotalWins());
+        assertEquals(25, user1.getTotalPoints());
+        assertEquals(10, user1.getTotalCorrectPlacements());
+        assertEquals(3, user1.getTotalIncorrectPlacements());
+
+        assertEquals(4, user2.getTotalGamesPlayed());
+        assertEquals(2, user2.getTotalWins());
+        assertEquals(33, user2.getTotalPoints());
+        assertEquals(10, user2.getTotalCorrectPlacements());
+        assertEquals(3, user2.getTotalIncorrectPlacements());
+
+        verify(userRepository, times(2)).save(any(User.class));
+        verify(gameRepository, times(1)).save(game);
+        verify(userRepository, times(1)).flush();
+        verify(gameRepository, times(1)).flush();
+    }
+
+    @Test
+    public void finalizeGame_tie_marksMultipleWinners() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+
+        User user1 = new User();
+        user1.setId(10L);
+        user1.setUsername("alex");
+        user1.setTotalGamesPlayed(0);
+        user1.setTotalWins(0);
+        user1.setTotalPoints(0);
+        user1.setTotalCorrectPlacements(0);
+        user1.setTotalIncorrectPlacements(0);
+
+        User user2 = new User();
+        user2.setId(11L);
+        user2.setUsername("mia");
+        user2.setTotalGamesPlayed(0);
+        user2.setTotalWins(0);
+        user2.setTotalPoints(0);
+        user2.setTotalCorrectPlacements(0);
+        user2.setTotalIncorrectPlacements(0);
+
+        GamePlayer gp1 = new GamePlayer();
+        gp1.setGame(game);
+        gp1.setUser(user1);
+        gp1.setScore(4);
+        gp1.setCorrectPlacements(4);
+        gp1.setIncorrectPlacements(1);
+
+        GamePlayer gp2 = new GamePlayer();
+        gp2.setGame(game);
+        gp2.setUser(user2);
+        gp2.setScore(4);
+        gp2.setCorrectPlacements(4);
+        gp2.setIncorrectPlacements(0);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findAllByGameOrderByScoreDescTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<FinalResultDTO> results = gameService.finalizeGame(1L);
+
+        assertEquals(2, results.size());
+        assertTrue(results.get(0).getWinner());
+        assertTrue(results.get(1).getWinner());
+
+        assertEquals(1, user1.getTotalWins());
+        assertEquals(1, user2.getTotalWins());
+    }
+
+    @Test
+    public void finalizeGame_notInProgress_throwsException() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("WAITING");
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> gameService.finalizeGame(1L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+    }
+
 }
