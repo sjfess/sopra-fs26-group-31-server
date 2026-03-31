@@ -49,7 +49,7 @@ class EventCardRevealDTOTest {
 
     @Test
     void testYearExposedUnlikeGetDTO() {
-        // EventCardRevealDTO MUST expose getYear() — it is the "reveal" DTO
+        // EventCardRevealDTO MUST expose getYear() to be able to check if a card is placed correctly
         boolean hasGetYear = false;
         for (java.lang.reflect.Method m : EventCardRevealDTO.class.getMethods()) {
             if (m.getName().equals("getYear")) {

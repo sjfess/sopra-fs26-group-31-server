@@ -42,7 +42,7 @@ class EventCardGetDTOTest {
 
     @Test
     void testYearFieldIsAbsent() {
-        // EventCardGetDTO deliberately does NOT expose a year field —
+        // EventCardGetDTO deliberately does NOT expose a year field:
         // year is hidden from players during gameplay.
         // Verify via reflection that no getYear() method exists.
         boolean hasGetYear = false;

@@ -45,7 +45,7 @@ class EventControllerTest {
         return card;
     }
 
-    // ── GET /events ───────────────────────────────────────────────────────────
+    // GET /events-tests
 
     @Test
     void getEvents_returnsOkWithCards() throws Exception {
@@ -133,7 +133,7 @@ class EventControllerTest {
                 .andExpect(jsonPath("$[1].title", is("Fall of the Berlin Wall")));
     }
 
-    // ── GET /events/reveal ────────────────────────────────────────────────────
+    // GET /events/reveal-tests
 
     @Test
     void getEventsRevealed_returnsOkWithYear() throws Exception {

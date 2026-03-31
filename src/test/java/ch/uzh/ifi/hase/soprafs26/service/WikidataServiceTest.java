@@ -23,10 +23,11 @@ class WikidataServiceTest {
     @Spy
     private WikidataService wikidataService;
 
-    // ── parseSparqlResponse ───────────────────────────────────────────────────
+    // parse SPARQL-response-test
 
     @Test
     void parseSparqlResponse_validJson_returnsCards() throws Exception {
+        // minimal but complete SPARQL JSON response with binding entry
         String json = """
                 {
                   "results": {
@@ -41,18 +42,22 @@ class WikidataServiceTest {
                   }
                 }
                 """;
-
+        // verify all fields are mapped correctly from JSON binding to EventCard
         List<EventCard> result = invokeParseSparqlResponse(json);
 
         assertEquals(1, result.size());
         assertEquals("Magna Carta", result.get(0).getTitle());
         assertEquals(1215, result.get(0).getYear());
         assertEquals("https://example.com/magna.jpg", result.get(0).getImageUrl());
+        // Wikidata-ID should be extracted from trailing part of entity URL
         assertEquals("Q178561", result.get(0).getWikidataId());
     }
 
+    // if "bindings" key is missing or empty, parser must be able to handle it
+
     @Test
     void parseSparqlResponse_missingBindings_returnsEmptyList() throws Exception {
+
         String json = "{ \"results\": {} }";
         List<EventCard> result = invokeParseSparqlResponse(json);
         assertTrue(result.isEmpty());
@@ -70,6 +75,8 @@ class WikidataServiceTest {
         List<EventCard> result = invokeParseSparqlResponse(json);
         assertTrue(result.isEmpty());
     }
+
+    // skip certain cards that do not meet criteria
 
     @Test
     void parseSparqlResponse_qNumberLabel_cardSkipped() throws Exception {
@@ -127,6 +134,8 @@ class WikidataServiceTest {
         assertTrue(result.isEmpty(), "Century-labels must be filtered out");
     }
 
+    // remove year from card so that players don't see it & have an advantage in the game
+
     @Test
     void parseSparqlResponse_titleContainsYear_yearStripped() throws Exception {
         String json = """
@@ -148,6 +157,8 @@ class WikidataServiceTest {
                 "Year digits must be stripped from the card title");
     }
 
+    // trigger-filter -> filter out certain events that are not appropriate
+
     @Test
     void parseSparqlResponse_inappropriateContent_cardSkipped() throws Exception {
         String json = """
@@ -166,6 +177,8 @@ class WikidataServiceTest {
         List<EventCard> result = invokeParseSparqlResponse(json);
         assertTrue(result.isEmpty(), "Cards with inappropriate content must be skipped");
     }
+
+    // check that all bindings create EventCard-entity & that none are unnecessarily discarded
 
     @Test
     void parseSparqlResponse_multipleCards_allParsed() throws Exception {
@@ -191,7 +204,7 @@ class WikidataServiceTest {
         assertEquals(2, result.size());
     }
 
-    // ── isMilitaryEvent ───────────────────────────────────────────────────────
+    // Military-event-test
 
     @Test
     void isMilitaryEvent_battleOf_returnsTrue() throws Exception {
@@ -230,7 +243,7 @@ class WikidataServiceTest {
         assertTrue(invokeIsMilitaryEvent("Conquest of Mexico"));
     }
 
-    // ── applyDiversityFilter ──────────────────────────────────────────────────
+    // Diversity-filter-test
 
     @Test
     void applyDiversityFilter_militaryCapEnforced() throws Exception {
@@ -279,7 +292,7 @@ class WikidataServiceTest {
         assertTrue(result.isEmpty());
     }
 
-    // ── getCuratedCards ───────────────────────────────────────────────────────
+    // Curated-cards-test
 
     @Test
     void getCuratedCards_modernEra_containsExpectedEntries() throws Exception {
@@ -303,7 +316,7 @@ class WikidataServiceTest {
         }
     }
 
-    // ── fetchEvents – mocked HTTP ─────────────────────────────────────────────
+    // fetch events – mocked HTTP
 
     @Test
     void fetchEvents_returnsListNotExceedingLimit() {
@@ -314,7 +327,7 @@ class WikidataServiceTest {
         assertTrue(result.size() <= 5);
     }
 
-    // ── extractValue ──────────────────────────────────────────────────────────
+    // extract value test
 
     @Test
     void extractValue_presentField_returnsValue() throws Exception {
@@ -338,7 +351,7 @@ class WikidataServiceTest {
         assertNull(result);
     }
 
-    // ── Reflection helpers ────────────────────────────────────────────────────
+    // Reflection helpers
 
     @SuppressWarnings("unchecked")
     private List<EventCard> invokeParseSparqlResponse(String json) throws Exception {
