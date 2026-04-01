@@ -1,5 +1,7 @@
 package ch.uzh.ifi.hase.soprafs26.rest.dto;
 
+import java.util.List;
+
 public class GameGetDTO {
 
     private Long id;
@@ -8,8 +10,13 @@ public class GameGetDTO {
     private String status;
     private int deckSize;
     private int cardsRemaining;
+    private Long hostId;
+    private List<PlayerSummaryDTO> players;
+    private int timelineSize;
+    private String difficulty;
 
-    // Getters & setters
+    public String getDifficulty() { return difficulty; }
+    public void setDifficulty(String difficulty) { this.difficulty = difficulty; }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -28,4 +35,13 @@ public class GameGetDTO {
 
     public int getCardsRemaining() { return cardsRemaining; }
     public void setCardsRemaining(int cardsRemaining) { this.cardsRemaining = cardsRemaining; }
+
+    public Long getHostId() { return hostId; }
+    public void setHostId(Long hostId) { this.hostId = hostId; }
+
+    public List<PlayerSummaryDTO> getPlayers() { return players; }
+    public void setPlayers(List<PlayerSummaryDTO> players) { this.players = players; }
+
+    public int getTimelineSize() { return timelineSize; }
+    public void setTimelineSize(int timelineSize) { this.timelineSize = timelineSize; }
 }

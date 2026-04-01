@@ -1,9 +1,12 @@
 package ch.uzh.ifi.hase.soprafs26.entity;
 
 import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
+import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
 
 import jakarta.persistence.*;
 import java.io.Serializable;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,18 +25,13 @@ public class Game implements Serializable {
     @GeneratedValue
     private Long id;
 
-    @ManyToMany
-    @JoinTable(
-            name = "game_players",
-            joinColumns = @JoinColumn(name = "game_id"),
-            inverseJoinColumns = @JoinColumn(name = "user_id")
-    )
-    private List<User> players = new ArrayList<>();
+
+    @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<GamePlayer> gamePlayers = new ArrayList<>();
 
     @Column(nullable = false)
-    private Long hostId;
-
-
+    @Enumerated(EnumType.STRING)
+    private Difficulty difficulty;
 
     @Column(nullable = false, unique = true)
     private String lobbyCode;
@@ -62,6 +60,15 @@ public class Game implements Serializable {
     @Column(nullable = false)
     private int deckSize;
 
+    /** The user ID of the host who created the game. */
+    @Column(nullable = false)
+    private Long hostId;
+
+    /** Ordered JSON array of successfully placed cards, sorted by year. **/
+    @Column(columnDefinition = "TEXT")
+    private String timelineJson;
+
+
     // Getters & setters
 
     public Long getId() { return id; }
@@ -88,6 +95,17 @@ public class Game implements Serializable {
     public Long getHostId() { return hostId; }
     public void setHostId(Long hostId) { this.hostId = hostId; }
 
-    public List<User> getPlayers() { return players; }
-    public void setPlayers(List<User> players) { this.players = players; }
+    public Difficulty getDifficulty(){return difficulty;}
+    public void setDifficulty(Difficulty difficulty){this.difficulty = difficulty;}
+
+    public List<GamePlayer> getGamePlayers() {
+        return gamePlayers;
+    }
+
+    public void setGamePlayers(List<GamePlayer> gamePlayers) {
+        this.gamePlayers = gamePlayers;
+    }
+    public String getTimelineJson() { return timelineJson; }
+    public void setTimelineJson(String timelineJson) { this.timelineJson = timelineJson; }
+
 }
