@@ -32,10 +32,16 @@ public class GamePlayerRepositoryIntegrationTest {
         User user = new User();
         user.setUsername("alex");
         user.setPassword("pw");
+        user.setSalt("salt-1");
         user.setToken("token");
         user.setStatus(UserStatus.ONLINE);
         user.setBio("");
         user.setCreationDate(Instant.now());
+        user.setTotalGamesPlayed(0);
+        user.setTotalWins(0);
+        user.setTotalPoints(0);
+        user.setTotalCorrectPlacements(0);
+        user.setTotalIncorrectPlacements(0);
         user = userRepository.saveAndFlush(user);
 
         Game game = new Game();
@@ -54,6 +60,7 @@ public class GamePlayerRepositoryIntegrationTest {
         gamePlayer.setScore(0);
         gamePlayer.setTurnOrder(0);
         gamePlayer.setActiveTurn(true);
+        gamePlayer.setCurrentCardIndex(null);
         gamePlayerRepository.saveAndFlush(gamePlayer);
 
         Optional<GamePlayer> found = gamePlayerRepository.findByGameAndActiveTurnTrue(game);
@@ -67,19 +74,31 @@ public class GamePlayerRepositoryIntegrationTest {
         User user1 = new User();
         user1.setUsername("alex");
         user1.setPassword("pw1");
+        user1.setSalt("salt-1");
         user1.setToken("token1");
         user1.setStatus(UserStatus.ONLINE);
         user1.setBio("");
         user1.setCreationDate(Instant.now());
+        user1.setTotalGamesPlayed(0);
+        user1.setTotalWins(0);
+        user1.setTotalPoints(0);
+        user1.setTotalCorrectPlacements(0);
+        user1.setTotalIncorrectPlacements(0);
         user1 = userRepository.saveAndFlush(user1);
 
         User user2 = new User();
         user2.setUsername("mia");
         user2.setPassword("pw2");
+        user2.setSalt("salt-2");
         user2.setToken("token2");
         user2.setStatus(UserStatus.ONLINE);
         user2.setBio("");
         user2.setCreationDate(Instant.now());
+        user2.setTotalGamesPlayed(0);
+        user2.setTotalWins(0);
+        user2.setTotalPoints(0);
+        user2.setTotalCorrectPlacements(0);
+        user2.setTotalIncorrectPlacements(0);
         user2 = userRepository.saveAndFlush(user2);
 
         Game game = new Game();
@@ -98,6 +117,7 @@ public class GamePlayerRepositoryIntegrationTest {
         gp1.setScore(3);
         gp1.setTurnOrder(1);
         gp1.setActiveTurn(false);
+        gp1.setCurrentCardIndex(null);
 
         GamePlayer gp2 = new GamePlayer();
         gp2.setGame(game);
@@ -105,6 +125,7 @@ public class GamePlayerRepositoryIntegrationTest {
         gp2.setScore(5);
         gp2.setTurnOrder(0);
         gp2.setActiveTurn(true);
+        gp2.setCurrentCardIndex(null);
 
         gamePlayerRepository.saveAndFlush(gp1);
         gamePlayerRepository.saveAndFlush(gp2);

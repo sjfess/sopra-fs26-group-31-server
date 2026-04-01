@@ -12,8 +12,14 @@ import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.time.Duration;
+import java.time.Instant;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
+import java.util.Comparator;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -126,9 +132,16 @@ public class GameService {
         for (int i = 0; i < gamePlayers.size(); i++) {
             GamePlayer gamePlayer = gamePlayers.get(i);
             gamePlayer.setScore(0);
-            gamePlayer.setActiveTurn(i == 0);
+            if (i == 0) {
+                gamePlayer.setActiveTurn(true);
+                gamePlayer.setTurnStartedAt(Instant.now());
+            } else {
+                gamePlayer.setActiveTurn(false);
+            }
             gamePlayer.setCurrentCardIndex(null);
             gamePlayerRepository.save(gamePlayer);
+            gamePlayer.setCorrectPlacements(0);
+            gamePlayer.setIncorrectPlacements(0);
         }
 
         game = gameRepository.save(game);
@@ -161,6 +174,7 @@ public class GameService {
         }
 
         activePlayer.setCurrentCardIndex(index);
+        activePlayer.setTurnStartedAt(Instant.now()); // reset timer when new card is drawn
         gamePlayerRepository.save(activePlayer);
 
         game.setNextCardIndex(index + 1);
@@ -253,6 +267,9 @@ public class GameService {
             timeline.add(position, card);
             game.setTimelineJson(serializeDeck(timeline));
             activePlayer.setScore(activePlayer.getScore() + 1);
+            activePlayer.setCorrectPlacements(activePlayer.getCorrectPlacements() + 1);
+        } else {
+            activePlayer.setIncorrectPlacements(activePlayer.getIncorrectPlacements() + 1);
         }
 
         activePlayer.setCurrentCardIndex(null);
@@ -460,6 +477,7 @@ public class GameService {
         int nextIndex = (currentIndex + 1) % players.size();
         GamePlayer nextPlayer = players.get(nextIndex);
         nextPlayer.setActiveTurn(true);
+        nextPlayer.setTurnStartedAt(Instant.now());
         gamePlayerRepository.save(nextPlayer);
     }
 
@@ -505,5 +523,86 @@ public class GameService {
         }
 
         gamePlayerRepository.deleteByGameAndUser(game, user);
+    }
+
+    @Scheduled(fixedDelay = 5000) // runs every 5 seconds
+    public void checkTurnTimeouts() {
+        long turnLimitSeconds = 30; // configure as needed
+
+        List<GamePlayer> activePlayers = gamePlayerRepository.findByActiveTurnTrue();
+
+        for (GamePlayer player : activePlayers) {
+            if (player.getTurnStartedAt() == null) continue;
+
+            Game game = player.getGame();
+            if (!"IN_PROGRESS".equals(game.getStatus())) continue;
+
+            long elapsed = Duration.between(player.getTurnStartedAt(), Instant.now()).getSeconds();
+
+            if (elapsed >= turnLimitSeconds) {
+                log.info("Turn timeout for player {} in game {}",
+                        player.getUser().getUsername(), game.getId());
+
+                // Advance to next player
+                advanceTurn(game, player);
+                gameRepository.save(game);
+            }
+        }
+    } 
+  
+    public List<FinalResultDTO> finalizeGame(Long gameId) {
+        Game game = findGameOrThrow(gameId);
+
+        if (!"IN_PROGRESS".equals(game.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Game is " + game.getStatus() + ", not IN_PROGRESS");
+        }
+
+        List<GamePlayer> gamePlayers = gamePlayerRepository.findAllByGameOrderByScoreDescTurnOrderAsc(game);
+
+        if (gamePlayers.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Game has no players");
+        }
+
+        int highestScore = gamePlayers.get(0).getScore() != null ? gamePlayers.get(0).getScore() : 0;
+
+        List<FinalResultDTO> finalResults = new ArrayList<>();
+
+        for (GamePlayer gamePlayer : gamePlayers) {
+            User user = gamePlayer.getUser();
+
+            int score = gamePlayer.getScore() != null ? gamePlayer.getScore() : 0;
+            int correctPlacements = gamePlayer.getCorrectPlacements() != null ? gamePlayer.getCorrectPlacements() : 0;
+            int incorrectPlacements = gamePlayer.getIncorrectPlacements() != null ? gamePlayer.getIncorrectPlacements() : 0;
+            boolean winner = score == highestScore;
+
+            user.setTotalGamesPlayed(user.getTotalGamesPlayed() + 1);
+            user.setTotalPoints(user.getTotalPoints() + score);
+            user.setTotalCorrectPlacements(user.getTotalCorrectPlacements() + correctPlacements);
+            user.setTotalIncorrectPlacements(user.getTotalIncorrectPlacements() + incorrectPlacements);
+
+            if (winner) {
+                user.setTotalWins(user.getTotalWins() + 1);
+            }
+
+            userRepository.save(user);
+
+            FinalResultDTO dto = new FinalResultDTO();
+            dto.setUserId(user.getId());
+            dto.setUsername(user.getUsername());
+            dto.setScore(score);
+            dto.setCorrectPlacements(correctPlacements);
+            dto.setIncorrectPlacements(incorrectPlacements);
+            dto.setWinner(winner);
+
+            finalResults.add(dto);
+        }
+
+        game.setStatus("FINISHED");
+        gameRepository.save(game);
+        userRepository.flush();
+        gameRepository.flush();
+
+        return finalResults;
     }
 }
