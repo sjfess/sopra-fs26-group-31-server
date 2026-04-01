@@ -17,6 +17,7 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -719,6 +720,95 @@ public class GameServiceTest {
         );
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+    }
+
+    @Test
+    public void checkTurnTimeouts_expiredTurn_advancesPlayer() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+
+        User user1 = new User(); user1.setId(10L); user1.setUsername("alex");
+        User user2 = new User(); user2.setId(11L); user2.setUsername("mia");
+
+        GamePlayer gp1 = new GamePlayer();
+        gp1.setId(100L); gp1.setGame(game); gp1.setUser(user1);
+        gp1.setActiveTurn(true); gp1.setTurnOrder(0);
+        gp1.setTurnStartedAt(Instant.now().minusSeconds(60)); // 60s ago — expired
+
+        GamePlayer gp2 = new GamePlayer();
+        gp2.setId(101L); gp2.setGame(game); gp2.setUser(user2);
+        gp2.setActiveTurn(false); gp2.setTurnOrder(1);
+
+        when(gamePlayerRepository.findByActiveTurnTrue()).thenReturn(List.of(gp1));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
+
+        gameService.checkTurnTimeouts();
+
+        assertFalse(gp1.getActiveTurn(), "Timed-out player must no longer be active");
+        assertTrue(gp2.getActiveTurn(), "Next player must become active after timeout");
+        assertNull(gp1.getCurrentCardIndex(), "Drawn card must be discarded on timeout");
+    }
+
+    @Test
+    public void checkTurnTimeouts_turnNotExpired_doesNotAdvance() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+
+        User user = new User(); user.setId(10L); user.setUsername("alex");
+
+        GamePlayer gp1 = new GamePlayer();
+        gp1.setId(100L); gp1.setGame(game); gp1.setUser(user);
+        gp1.setActiveTurn(true); gp1.setTurnOrder(0);
+        gp1.setTurnStartedAt(Instant.now().minusSeconds(5)); // only 5s ago
+
+        when(gamePlayerRepository.findByActiveTurnTrue()).thenReturn(List.of(gp1));
+
+        gameService.checkTurnTimeouts();
+
+        assertTrue(gp1.getActiveTurn(), "Non-expired turn must not be advanced");
+        verify(gamePlayerRepository, never()).findAllByGameOrderByTurnOrderAsc(any());
+    }
+
+    @Test
+    public void checkTurnTimeouts_gameNotInProgress_skipped() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("WAITING"); // not IN_PROGRESS
+
+        User user = new User(); user.setId(10L); user.setUsername("alex");
+
+        GamePlayer gp1 = new GamePlayer();
+        gp1.setId(100L); gp1.setGame(game); gp1.setUser(user);
+        gp1.setActiveTurn(true); gp1.setTurnOrder(0);
+        gp1.setTurnStartedAt(Instant.now().minusSeconds(60));
+
+        when(gamePlayerRepository.findByActiveTurnTrue()).thenReturn(List.of(gp1));
+
+        gameService.checkTurnTimeouts();
+
+        assertTrue(gp1.getActiveTurn(), "Turn in non-IN_PROGRESS game must not be advanced");
+    }
+
+    @Test
+    public void checkTurnTimeouts_nullTurnStartedAt_skipped() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+
+        User user = new User(); user.setId(10L); user.setUsername("alex");
+
+        GamePlayer gp1 = new GamePlayer();
+        gp1.setId(100L); gp1.setGame(game); gp1.setUser(user);
+        gp1.setActiveTurn(true); gp1.setTurnOrder(0);
+        gp1.setTurnStartedAt(null); // timer never started
+
+        when(gamePlayerRepository.findByActiveTurnTrue()).thenReturn(List.of(gp1));
+
+        gameService.checkTurnTimeouts();
+
+        assertTrue(gp1.getActiveTurn(), "Player with null turnStartedAt must not be skipped");
     }
 
 }

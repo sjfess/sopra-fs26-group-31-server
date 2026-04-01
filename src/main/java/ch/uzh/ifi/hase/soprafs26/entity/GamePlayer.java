@@ -100,9 +100,9 @@ public class GamePlayer implements Serializable {
     }
 
     public Instant getTurnStartedAt() { return turnStartedAt; }
-  
+
     public void setTurnStartedAt(Instant turnStartedAt) { this.turnStartedAt = turnStartedAt; }
-  
+
     public Integer getCorrectPlacements() {
         return correctPlacements;
     }

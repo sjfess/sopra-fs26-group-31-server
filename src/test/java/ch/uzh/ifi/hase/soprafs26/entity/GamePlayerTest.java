@@ -2,6 +2,8 @@ package ch.uzh.ifi.hase.soprafs26.entity;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 public class GamePlayerTest {
@@ -59,5 +61,19 @@ public class GamePlayerTest {
         assertEquals(0, gamePlayer.getScore());
         assertEquals(0, gamePlayer.getTurnOrder());
         assertFalse(gamePlayer.getActiveTurn());
+    }
+
+    @Test
+    public void gamePlayerEntity_turnStartedAt_setAndGet() {
+        GamePlayer gamePlayer = new GamePlayer();
+        Instant now = Instant.now();
+        gamePlayer.setTurnStartedAt(now);
+        assertEquals(now, gamePlayer.getTurnStartedAt());
+    }
+
+    @Test
+    public void gamePlayerEntity_turnStartedAt_defaultIsNull() {
+        GamePlayer gamePlayer = new GamePlayer();
+        assertNull(gamePlayer.getTurnStartedAt());
     }
 }

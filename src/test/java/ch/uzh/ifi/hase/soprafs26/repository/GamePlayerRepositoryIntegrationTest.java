@@ -136,4 +136,42 @@ public class GamePlayerRepositoryIntegrationTest {
         assertEquals("mia", result.get(0).getUser().getUsername());
         assertEquals("alex", result.get(1).getUser().getUsername());
     }
+
+    @Test
+    public void findByActiveTurnTrue_success() {
+        User user = new User();
+        user.setUsername("bob");
+        user.setPassword("pw");
+        user.setSalt("testSalt");
+        user.setToken("token-bob");
+        user.setStatus(UserStatus.ONLINE);
+        user.setBio("");
+        user.setCreationDate(Instant.now());
+        user = userRepository.saveAndFlush(user);
+
+        Game game = new Game();
+        game.setLobbyCode("TIM001");
+        game.setEra(HistoricalEra.MODERN);
+        game.setStatus("IN_PROGRESS");
+        game.setHostId(user.getId());
+        game.setDeckSize(0);
+        game.setNextCardIndex(0);
+        game.setTimelineJson("[]");
+        game = gameRepository.saveAndFlush(game);
+
+        GamePlayer gp = new GamePlayer();
+        gp.setGame(game);
+        gp.setUser(user);
+        gp.setScore(0);
+        gp.setTurnOrder(0);
+        gp.setActiveTurn(true);
+        gp.setTurnStartedAt(Instant.now());
+        gamePlayerRepository.saveAndFlush(gp);
+
+        List<GamePlayer> result = gamePlayerRepository.findByActiveTurnTrue();
+
+        assertFalse(result.isEmpty());
+        assertTrue(result.stream().allMatch(GamePlayer::getActiveTurn));
+        assertNotNull(result.get(0).getTurnStartedAt());
+    }
 }
