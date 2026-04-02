@@ -17,6 +17,8 @@ import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
 
 import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
 
+import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;

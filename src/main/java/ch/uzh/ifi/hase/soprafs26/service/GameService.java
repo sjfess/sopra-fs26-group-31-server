@@ -3,38 +3,51 @@ package ch.uzh.ifi.hase.soprafs26.service;
 import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
 import ch.uzh.ifi.hase.soprafs26.entity.EventCard;
 import ch.uzh.ifi.hase.soprafs26.entity.Game;
+import ch.uzh.ifi.hase.soprafs26.entity.GamePlayer;
+import ch.uzh.ifi.hase.soprafs26.entity.User;
+import ch.uzh.ifi.hase.soprafs26.repository.GamePlayerRepository;
 import ch.uzh.ifi.hase.soprafs26.repository.GameRepository;
-
+import ch.uzh.ifi.hase.soprafs26.repository.UserRepository;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
+
+import java.time.Duration;
+import java.time.Instant;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
+import java.util.Comparator;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-/**
- * Manages game sessions: creating lobbies, starting games (which fetches
- * and stores the deck), and drawing/revealing cards.
- */
 @Service
 public class GameService {
 
     private static final Logger log = LoggerFactory.getLogger(GameService.class);
 
     private final GameRepository gameRepository;
+    private final GamePlayerRepository gamePlayerRepository;
+    private final UserRepository userRepository;
     private final WikidataService wikidataService;
     private final Random random = new Random();
 
-    public GameService(GameRepository gameRepository, WikidataService wikidataService) {
+    public GameService(
+            GameRepository gameRepository,
+            GamePlayerRepository gamePlayerRepository,
+            UserRepository userRepository,
+            WikidataService wikidataService
+    ) {
         this.gameRepository = gameRepository;
+        this.gamePlayerRepository = gamePlayerRepository;
+        this.userRepository = userRepository;
         this.wikidataService = wikidataService;
     }
-
-    //  Lobby/Game-lifecycle
 
     /**
      * Creates a new game in WAITING status with a random 6-char lobby code.
@@ -55,6 +68,7 @@ public class GameService {
         game.setDifficulty(difficulty);
         game.setNextCardIndex(0);
         game.setDeckSize(0);
+        game.setTimelineJson("[]");
 
         game = gameRepository.save(game);
         log.info("Created game {} with lobby code {} for era {}",
@@ -71,12 +85,43 @@ public class GameService {
     }
 
     /**
-     * Starts the game: fetches cards from Wikidata once and stores the
-     * deck on the Game entity. After this call the deck is fixed.
-     *
-     * @param gameId the game to start
-     * @param deckSize how many cards to fetch (e.g. players × 5 + buffer)
-     * @return the updated Game
+     * Adds a user to a WAITING game lobby via lobby code.
+     */
+    public Game joinGame(String lobbyCode, Long userId) {
+        Game game = gameRepository.findByLobbyCode(lobbyCode)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Game with lobby code " + lobbyCode + " not found"));
+
+        if (!"WAITING".equals(game.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Cannot join a game that is already " + game.getStatus());
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User with id " + userId + " was not found"));
+
+        if (gamePlayerRepository.existsByGameAndUser(game, user)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "User is already part of this game");
+        }
+
+        List<GamePlayer> existingPlayers = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
+
+        GamePlayer gamePlayer = new GamePlayer();
+        gamePlayer.setGame(game);
+        gamePlayer.setUser(user);
+        gamePlayer.setScore(0);
+        gamePlayer.setTurnOrder(existingPlayers.size());
+        gamePlayer.setActiveTurn(false);
+        gamePlayer.setCurrentCardIndex(null);
+
+        gamePlayerRepository.save(gamePlayer);
+        return game;
+    }
+
+    /**
+     * Starts the game and initializes turn order and scores.
      */
     public Game startGame(Long gameId, int deckSize) {
         Game game = findGameOrThrow(gameId);
@@ -85,11 +130,14 @@ public class GameService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Game is already " + game.getStatus());
         }
-        if (game.getPlayers().size() < 2){
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Not enough players or settings incomplete");
+
+        List<GamePlayer> gamePlayers = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
+        if (gamePlayers.size() < 2) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Not enough players or settings incomplete");
         }
-        log.info("Starting game {} – fetching {} cards for era {}",
-                gameId, deckSize, game.getEra());
+
+        log.info("Starting game {} – fetching {} cards for era {}", gameId, deckSize, game.getEra());
 
         List<EventCard> deck = wikidataService.fetchEvents(game.getEra(), deckSize);
 
@@ -97,21 +145,43 @@ public class GameService {
         game.setDeckSize(deck.size());
         game.setNextCardIndex(0);
         game.setStatus("IN_PROGRESS");
+        game.setTimelineJson("[]");
+
+        for (int i = 0; i < gamePlayers.size(); i++) {
+            GamePlayer gamePlayer = gamePlayers.get(i);
+            gamePlayer.setScore(0);
+            if (i == 0) {
+                gamePlayer.setActiveTurn(true);
+                gamePlayer.setTurnStartedAt(Instant.now());
+            } else {
+                gamePlayer.setActiveTurn(false);
+            }
+            gamePlayer.setCurrentCardIndex(null);
+            gamePlayerRepository.save(gamePlayer);
+            gamePlayer.setCorrectPlacements(0);
+            gamePlayer.setIncorrectPlacements(0);
+        }
 
         game = gameRepository.save(game);
         log.info("Game {} started with {} cards", gameId, deck.size());
         return game;
     }
 
-    // Card-operations
-
     /**
-     * Draws the next card from the deck (hidden – no year).
-     * Advances {@code nextCardIndex} by 1.
+     * Draws the next card for the active player.
      */
     public EventCard drawCard(Long gameId) {
         Game game = findGameOrThrow(gameId);
         assertInProgress(game);
+
+        GamePlayer activePlayer = gamePlayerRepository.findByGameAndActiveTurnTrue(game)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT, "No active player found for this game"));
+
+        if (activePlayer.getCurrentCardIndex() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Active player already has a drawn card that must be placed first");
+        }
 
         List<EventCard> deck = deserializeDeck(game.getDeckJson());
         int index = game.getNextCardIndex();
@@ -121,6 +191,10 @@ public class GameService {
                     "No cards left in the deck");
         }
 
+        activePlayer.setCurrentCardIndex(index);
+        activePlayer.setTurnStartedAt(Instant.now()); // reset timer when new card is drawn
+        gamePlayerRepository.save(activePlayer);
+
         game.setNextCardIndex(index + 1);
         gameRepository.save(game);
 
@@ -128,8 +202,7 @@ public class GameService {
     }
 
     /**
-     * Returns a specific card from the deck by its position (0-based).
-     * Use this to reveal a card's year after placement.
+     * Returns a specific card from the deck by deck index.
      */
     public EventCard getCard(Long gameId, int cardIndex) {
         Game game = findGameOrThrow(gameId);
@@ -146,27 +219,118 @@ public class GameService {
     }
 
     /**
-     * Returns ALL cards in the deck with years visible.
-     * Useful for debugging or end-of-game reveal.
+     * Returns all cards in the deck with years visible.
      */
     public List<EventCard> getAllCards(Long gameId) {
         Game game = findGameOrThrow(gameId);
         return deserializeDeck(game.getDeckJson());
     }
 
-    /**
-     * Returns basic game info.
-     */
     public Game getGame(Long gameId) {
         return findGameOrThrow(gameId);
     }
 
-    // Deck-serialization
-
     /**
-     * Converts a list of EventCards to a JSON array string.
-     * Example output: [{"title":"Moon Landing","year":1969,"imageUrl":null,"wikidataId":"Q123"}]
+     * Places the active player's currently drawn card at the chosen timeline position.
      */
+    public Object[] placeCard(Long gameId, int cardIndex, int position) {
+        Game game = findGameOrThrow(gameId);
+        assertInProgress(game);
+
+        GamePlayer activePlayer = gamePlayerRepository.findByGameAndActiveTurnTrue(game)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT, "No active player found for this game"));
+
+        if (activePlayer.getCurrentCardIndex() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Active player has not drawn a card yet");
+        }
+
+        if (!activePlayer.getCurrentCardIndex().equals(cardIndex)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Player may only place the card they most recently drew");
+        }
+
+        List<EventCard> deck = deserializeDeck(game.getDeckJson());
+        if (cardIndex < 0 || cardIndex >= deck.size()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "Card index " + cardIndex + " out of range");
+        }
+        EventCard card = deck.get(cardIndex);
+
+        List<EventCard> timeline = deserializeDeck(game.getTimelineJson());
+
+        if (position < 0 || position > timeline.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Position " + position + " out of range (timeline has " + timeline.size() + " cards)");
+        }
+
+        boolean correct = true;
+
+        if (position > 0) {
+            EventCard before = timeline.get(position - 1);
+            if (card.getYear() < before.getYear()) {
+                correct = false;
+            }
+        }
+
+        if (correct && position < timeline.size()) {
+            EventCard after = timeline.get(position);
+            if (card.getYear() > after.getYear()) {
+                correct = false;
+            }
+        }
+
+        if (correct) {
+            timeline.add(position, card);
+            game.setTimelineJson(serializeDeck(timeline));
+            activePlayer.setScore(activePlayer.getScore() + 1);
+            activePlayer.setCorrectPlacements(activePlayer.getCorrectPlacements() + 1);
+        } else {
+            activePlayer.setIncorrectPlacements(activePlayer.getIncorrectPlacements() + 1);
+        }
+
+        activePlayer.setCurrentCardIndex(null);
+        gamePlayerRepository.save(activePlayer);
+
+        advanceTurn(game, activePlayer);
+        gameRepository.save(game);
+
+        log.info("Game {} – player {} placed card '{}' ({}) at position {}: {}",
+                gameId,
+                activePlayer.getUser().getUsername(),
+                card.getTitle(),
+                card.getYear(),
+                position,
+                correct ? "CORRECT" : "WRONG");
+
+        return new Object[]{card, correct, timeline.size()};
+    }
+
+    public List<EventCard> getTimeline(Long gameId) {
+        Game game = findGameOrThrow(gameId);
+        return deserializeDeck(game.getTimelineJson());
+    }
+
+    public List<GamePlayerScoreDTO> getLiveScores(Long gameId) {
+        Game game = findGameOrThrow(gameId);
+
+        List<GamePlayer> gamePlayers = gamePlayerRepository.findAllByGameOrderByScoreDescTurnOrderAsc(game);
+        List<GamePlayerScoreDTO> scores = new ArrayList<>();
+
+        for (GamePlayer gamePlayer : gamePlayers) {
+            GamePlayerScoreDTO dto = new GamePlayerScoreDTO();
+            dto.setUserId(gamePlayer.getUser().getId());
+            dto.setUsername(gamePlayer.getUser().getUsername());
+            dto.setScore(gamePlayer.getScore());
+            dto.setTurnOrder(gamePlayer.getTurnOrder());
+            dto.setActiveTurn(gamePlayer.getActiveTurn());
+            scores.add(dto);
+        }
+
+        return scores;
+    }
+
     String serializeDeck(List<EventCard> deck) {
         StringBuilder sb = new StringBuilder("[");
         for (int i = 0; i < deck.size(); i++) {
@@ -193,16 +357,12 @@ public class GameService {
         return sb.toString();
     }
 
-    /**
-     * Parses the JSON array string back into a list of EventCards.
-     */
     List<EventCard> deserializeDeck(String json) {
         List<EventCard> cards = new ArrayList<>();
         if (json == null || json.isEmpty() || "[]".equals(json)) {
             return cards;
         }
 
-        // Walk through the JSON array, extracting each {...} block
         int depth = 0;
         int blockStart = -1;
 
@@ -248,20 +408,18 @@ public class GameService {
         return card;
     }
 
-    /** Extracts a string value for "key":"value" */
     private String extractJsonString(String block, String key) {
         String search = "\"" + key + "\":";
         int pos = block.indexOf(search);
         if (pos == -1) return null;
 
         int valueStart = pos + search.length();
-        // skip whitespace
         while (valueStart < block.length() && block.charAt(valueStart) == ' ') valueStart++;
 
         if (valueStart >= block.length()) return null;
-        if (block.charAt(valueStart) == 'n') return null; // "null"
-
+        if (block.charAt(valueStart) == 'n') return null;
         if (block.charAt(valueStart) != '"') return null;
+
         int openQuote = valueStart;
         int closeQuote = openQuote + 1;
         while (closeQuote < block.length()) {
@@ -269,10 +427,10 @@ public class GameService {
             closeQuote++;
         }
         if (closeQuote >= block.length()) return null;
+
         return unescapeJson(block.substring(openQuote + 1, closeQuote));
     }
 
-    /** Extracts a number value for "key":123 */
     private String extractJsonNumber(String block, String key) {
         String search = "\"" + key + "\":";
         int pos = block.indexOf(search);
@@ -311,7 +469,35 @@ public class GameService {
                 .replace("\\t", "\t");
     }
 
-    // Helper-functions
+    private void advanceTurn(Game game, GamePlayer currentPlayer) {
+        List<GamePlayer> players = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
+
+        if (players.isEmpty()) {
+            return;
+        }
+
+        currentPlayer.setActiveTurn(false);
+        gamePlayerRepository.save(currentPlayer);
+
+        int currentIndex = -1;
+        for (int i = 0; i < players.size(); i++) {
+            if (players.get(i).getId().equals(currentPlayer.getId())) {
+                currentIndex = i;
+                break;
+            }
+        }
+
+        if (currentIndex == -1) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Current active player not found in turn order");
+        }
+
+        int nextIndex = (currentIndex + 1) % players.size();
+        GamePlayer nextPlayer = players.get(nextIndex);
+        nextPlayer.setActiveTurn(true);
+        nextPlayer.setTurnStartedAt(Instant.now());
+        gamePlayerRepository.save(nextPlayer);
+    }
 
     private Game findGameOrThrow(Long gameId) {
         return gameRepository.findById(gameId)
@@ -327,11 +513,114 @@ public class GameService {
     }
 
     private String generateLobbyCode() {
-        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I/O/0/1 to avoid confusion
+        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
         StringBuilder code = new StringBuilder();
         for (int i = 0; i < 6; i++) {
             code.append(chars.charAt(random.nextInt(chars.length())));
         }
         return code.toString();
+    }
+
+    public void leaveGame(String lobbyCode, Long userId) {
+        Game game = gameRepository.findByLobbyCode(lobbyCode)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Game with lobby code " + lobbyCode + " not found"));
+
+        if (!"WAITING".equals(game.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Cannot leave a game that is already " + game.getStatus());
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User with id " + userId + " was not found"));
+
+        if (!gamePlayerRepository.existsByGameAndUser(game, user)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "User is not part of this game");
+        }
+
+        gamePlayerRepository.deleteByGameAndUser(game, user);
+    }
+
+    @Scheduled(fixedDelay = 5000) // runs every 5 seconds
+    public void checkTurnTimeouts() {
+        long turnLimitSeconds = 30; // configure as needed
+
+        List<GamePlayer> activePlayers = gamePlayerRepository.findByActiveTurnTrue();
+
+        for (GamePlayer player : activePlayers) {
+            if (player.getTurnStartedAt() == null) continue;
+
+            Game game = player.getGame();
+            if (!"IN_PROGRESS".equals(game.getStatus())) continue;
+
+            long elapsed = Duration.between(player.getTurnStartedAt(), Instant.now()).getSeconds();
+
+            if (elapsed >= turnLimitSeconds) {
+                log.info("Turn timeout for player {} in game {}",
+                        player.getUser().getUsername(), game.getId());
+
+                // Advance to next player
+                advanceTurn(game, player);
+                gameRepository.save(game);
+            }
+        }
+    } 
+  
+    public List<FinalResultDTO> finalizeGame(Long gameId) {
+        Game game = findGameOrThrow(gameId);
+
+        if (!"IN_PROGRESS".equals(game.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Game is " + game.getStatus() + ", not IN_PROGRESS");
+        }
+
+        List<GamePlayer> gamePlayers = gamePlayerRepository.findAllByGameOrderByScoreDescTurnOrderAsc(game);
+
+        if (gamePlayers.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Game has no players");
+        }
+
+        int highestScore = gamePlayers.get(0).getScore() != null ? gamePlayers.get(0).getScore() : 0;
+
+        List<FinalResultDTO> finalResults = new ArrayList<>();
+
+        for (GamePlayer gamePlayer : gamePlayers) {
+            User user = gamePlayer.getUser();
+
+            int score = gamePlayer.getScore() != null ? gamePlayer.getScore() : 0;
+            int correctPlacements = gamePlayer.getCorrectPlacements() != null ? gamePlayer.getCorrectPlacements() : 0;
+            int incorrectPlacements = gamePlayer.getIncorrectPlacements() != null ? gamePlayer.getIncorrectPlacements() : 0;
+            boolean winner = score == highestScore;
+
+            user.setTotalGamesPlayed(user.getTotalGamesPlayed() + 1);
+            user.setTotalPoints(user.getTotalPoints() + score);
+            user.setTotalCorrectPlacements(user.getTotalCorrectPlacements() + correctPlacements);
+            user.setTotalIncorrectPlacements(user.getTotalIncorrectPlacements() + incorrectPlacements);
+
+            if (winner) {
+                user.setTotalWins(user.getTotalWins() + 1);
+            }
+
+            userRepository.save(user);
+
+            FinalResultDTO dto = new FinalResultDTO();
+            dto.setUserId(user.getId());
+            dto.setUsername(user.getUsername());
+            dto.setScore(score);
+            dto.setCorrectPlacements(correctPlacements);
+            dto.setIncorrectPlacements(incorrectPlacements);
+            dto.setWinner(winner);
+
+            finalResults.add(dto);
+        }
+
+        game.setStatus("FINISHED");
+        gameRepository.save(game);
+        userRepository.flush();
+        gameRepository.flush();
+
+        return finalResults;
     }
 }

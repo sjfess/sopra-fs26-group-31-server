@@ -1,5 +1,9 @@
 package ch.uzh.ifi.hase.soprafs26.service;
 
+import ch.uzh.ifi.hase.soprafs26.constant.UserStatus;
+import ch.uzh.ifi.hase.soprafs26.entity.User;
+import ch.uzh.ifi.hase.soprafs26.repository.UserRepository;
+import ch.uzh.ifi.hase.soprafs26.util.PasswordUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,70 +12,115 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.web.WebAppConfiguration;
 import org.springframework.web.server.ResponseStatusException;
 
-import ch.uzh.ifi.hase.soprafs26.constant.UserStatus;
-import ch.uzh.ifi.hase.soprafs26.entity.User;
-import ch.uzh.ifi.hase.soprafs26.repository.UserRepository;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Test class for the UserResource REST resource.
- *
- * @see UserService
- */
 @WebAppConfiguration
 @SpringBootTest
 public class UserServiceIntegrationTest {
 
-	@Qualifier("userRepository")
-	@Autowired
-	private UserRepository userRepository;
+    @Qualifier("userRepository")
+    @Autowired
+    private UserRepository userRepository;
 
-	@Autowired
-	private UserService userService;
+    @Autowired
+    private UserService userService;
 
-	@BeforeEach
-	public void setup() {
-		userRepository.deleteAll();
-	}
+    @BeforeEach
+    public void setup() {
+        userRepository.deleteAll();
+    }
 
-	@Test
-	public void createUser_validInputs_success() {
-		// given
-		assertNull(userRepository.findByUsername("testUsername"));
+    @Test
+    public void createUser_validInputs_success() {
+        assertNull(userRepository.findByUsername("testUsername"));
 
-		User testUser = new User();
-		testUser.setName("testName");
-		testUser.setUsername("testUsername");
+        User testUser = new User();
+        testUser.setUsername("testUsername");
+        testUser.setPassword("testPassword");
 
-		// when
-		User createdUser = userService.createUser(testUser);
+        User createdUser = userService.createUser(testUser);
 
-		// then
-		assertEquals(testUser.getId(), createdUser.getId());
-		assertEquals(testUser.getName(), createdUser.getName());
-		assertEquals(testUser.getUsername(), createdUser.getUsername());
-		assertNotNull(createdUser.getToken());
-		assertEquals(UserStatus.OFFLINE, createdUser.getStatus());
-	}
+        assertNotNull(createdUser.getId());
+        assertEquals("testUsername", createdUser.getUsername());
 
-	@Test
-	public void createUser_duplicateUsername_throwsException() {
-		assertNull(userRepository.findByUsername("testUsername"));
+        assertNotEquals("testPassword", createdUser.getPassword());
+        assertNotNull(createdUser.getSalt());
+        assertTrue(PasswordUtil.matches("testPassword", createdUser.getPassword(), createdUser.getSalt()));
 
-		User testUser = new User();
-		testUser.setName("testName");
-		testUser.setUsername("testUsername");
-		userService.createUser(testUser);
+        assertNotNull(createdUser.getToken());
+        assertEquals(UserStatus.OFFLINE, createdUser.getStatus());
+        assertNotNull(createdUser.getCreationDate());
+        assertEquals("", createdUser.getBio());
+        assertEquals(0, createdUser.getTotalGamesPlayed());
+        assertEquals(0, createdUser.getTotalWins());
+        assertEquals(0, createdUser.getTotalPoints());
+    }
 
-		// attempt to create second user with same username
-		User testUser2 = new User();
+    @Test
+    public void createUser_duplicateUsername_throwsException() {
+        assertNull(userRepository.findByUsername("testUsername"));
 
-		// change the name but forget about the username
-		testUser2.setName("testName2");
-		testUser2.setUsername("testUsername");
+        User testUser = new User();
+        testUser.setUsername("testUsername");
+        testUser.setPassword("testPassword");
+        userService.createUser(testUser);
 
-		// check that an error is thrown
-		assertThrows(ResponseStatusException.class, () -> userService.createUser(testUser2));
-	}
+        User testUser2 = new User();
+        testUser2.setUsername("testUsername");
+        testUser2.setPassword("anotherPassword");
+
+        assertThrows(ResponseStatusException.class, () -> userService.createUser(testUser2));
+    }
+
+    @Test
+    public void getUserById_success() {
+        User user = new User();
+        user.setUsername("user1");
+        user.setPassword("hashed-secret");
+        user.setSalt("salt");
+        user.setToken("token-1");
+        user.setStatus(UserStatus.OFFLINE);
+        user.setBio("bio");
+        user.setCreationDate(Instant.now());
+        user.setTotalGamesPlayed(0);
+        user.setTotalWins(0);
+        user.setTotalPoints(0);
+        user.setTotalCorrectPlacements(0);
+        user.setTotalIncorrectPlacements(0);
+
+        User savedUser = userRepository.saveAndFlush(user);
+
+        User foundUser = userService.getUserById(savedUser.getId());
+
+        assertEquals(savedUser.getId(), foundUser.getId());
+        assertEquals(savedUser.getUsername(), foundUser.getUsername());
+    }
+
+    @Test
+    public void updateUserProfile_success() {
+        User user = new User();
+        user.setUsername("oldUsername");
+        user.setPassword("hashed-secret");
+        user.setSalt("salt");
+        user.setToken("valid-token");
+        user.setStatus(UserStatus.ONLINE);
+        user.setBio("old bio");
+        user.setCreationDate(Instant.now());
+        user.setTotalGamesPlayed(0);
+        user.setTotalWins(0);
+        user.setTotalPoints(0);
+        user.setTotalCorrectPlacements(0);
+        user.setTotalIncorrectPlacements(0);
+
+        User savedUser = userRepository.saveAndFlush(user);
+
+        userService.updateUserProfile("valid-token", savedUser.getId(), "newUsername", "new bio");
+
+        User updatedUser = userRepository.findById(savedUser.getId()).orElseThrow();
+
+        assertEquals("newUsername", updatedUser.getUsername());
+        assertEquals("new bio", updatedUser.getBio());
+    }
 }
