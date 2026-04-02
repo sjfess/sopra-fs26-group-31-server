@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -51,11 +52,20 @@ public class GameService {
     /**
      * Creates a new game in WAITING status with a random 6-char lobby code.
      */
-    public Game createGame(HistoricalEra era) {
+    public Game createGame(HistoricalEra era, Difficulty difficulty, Long userId) {
+        if (era == null || difficulty == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Era and difficulty are required");
+        }
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User with id " + userId + " was not found"));
+
         Game game = new Game();
         game.setLobbyCode(generateLobbyCode());
         game.setEra(era);
+        game.setHostId(userId);
         game.setStatus("WAITING");
+        game.setDifficulty(difficulty);
         game.setNextCardIndex(0);
         game.setDeckSize(0);
         game.setTimelineJson("[]");
@@ -63,6 +73,14 @@ public class GameService {
         game = gameRepository.save(game);
         log.info("Created game {} with lobby code {} for era {}",
                 game.getId(), game.getLobbyCode(), era);
+        GamePlayer hostPlayer = new GamePlayer();
+        hostPlayer.setGame(game);
+        hostPlayer.setUser(user);
+        hostPlayer.setScore(0);
+        hostPlayer.setTurnOrder(0);
+        hostPlayer.setActiveTurn(false);
+        hostPlayer.setCurrentCardIndex(null);
+        gamePlayerRepository.save(hostPlayer);
         return game;
     }
 

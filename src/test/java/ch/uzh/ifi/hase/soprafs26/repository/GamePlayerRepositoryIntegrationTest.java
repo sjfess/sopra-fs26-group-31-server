@@ -1,5 +1,5 @@
 package ch.uzh.ifi.hase.soprafs26.repository;
-
+import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
 import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
 import ch.uzh.ifi.hase.soprafs26.constant.UserStatus;
 import ch.uzh.ifi.hase.soprafs26.entity.Game;
@@ -49,6 +49,7 @@ public class GamePlayerRepositoryIntegrationTest {
         game.setEra(HistoricalEra.MODERN);
         game.setStatus("WAITING");
         game.setHostId(user.getId());
+        game.setDifficulty(Difficulty.EASY);
         game.setDeckSize(0);
         game.setNextCardIndex(0);
         game.setTimelineJson("[]");
@@ -105,6 +106,7 @@ public class GamePlayerRepositoryIntegrationTest {
         game.setLobbyCode("XYZ789");
         game.setEra(HistoricalEra.MODERN);
         game.setStatus("IN_PROGRESS");
+        game.setDifficulty(Difficulty.EASY);
         game.setHostId(user1.getId());
         game.setDeckSize(0);
         game.setNextCardIndex(0);

@@ -11,10 +11,12 @@ public class GameGetDTO {
     private int deckSize;
     private int cardsRemaining;
     private Long hostId;
-    private List<Long> playerIds;
+    private List<PlayerSummaryDTO> players;
     private int timelineSize;
+    private String difficulty;
 
-    // Getters & setters
+    public String getDifficulty() { return difficulty; }
+    public void setDifficulty(String difficulty) { this.difficulty = difficulty; }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -37,11 +39,9 @@ public class GameGetDTO {
     public Long getHostId() { return hostId; }
     public void setHostId(Long hostId) { this.hostId = hostId; }
 
-    public List<Long> getPlayerIds() { return playerIds; }
-    public void setPlayerIds(List<Long> playerIds) { this.playerIds = playerIds; }
-  
+    public List<PlayerSummaryDTO> getPlayers() { return players; }
+    public void setPlayers(List<PlayerSummaryDTO> players) { this.players = players; }
+
     public int getTimelineSize() { return timelineSize; }
     public void setTimelineSize(int timelineSize) { this.timelineSize = timelineSize; }
-
-
 }

@@ -1,6 +1,7 @@
 package ch.uzh.ifi.hase.soprafs26.entity;
 
 import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
+import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
 
 import jakarta.persistence.*;
 import java.io.Serializable;
@@ -28,6 +29,9 @@ public class Game implements Serializable {
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<GamePlayer> gamePlayers = new ArrayList<>();
 
+    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    private Difficulty difficulty;
 
     @Column(nullable = false, unique = true)
     private String lobbyCode;
@@ -90,6 +94,9 @@ public class Game implements Serializable {
 
     public Long getHostId() { return hostId; }
     public void setHostId(Long hostId) { this.hostId = hostId; }
+
+    public Difficulty getDifficulty(){return difficulty;}
+    public void setDifficulty(Difficulty difficulty){this.difficulty = difficulty;}
 
     public List<GamePlayer> getGamePlayers() {
         return gamePlayers;
