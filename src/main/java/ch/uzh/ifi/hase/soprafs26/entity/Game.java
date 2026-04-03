@@ -25,6 +25,9 @@ public class Game implements Serializable {
     @GeneratedValue
     private Long id;
 
+    @Column
+    private String gameMode;
+
 
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<GamePlayer> gamePlayers = new ArrayList<>();
@@ -43,6 +46,9 @@ public class Game implements Serializable {
     /** WAITING → IN_PROGRESS → FINISHED */
     @Column(nullable = false)
     private String status;
+
+    @Column
+    private final int maxPlayers = 8;
 
     /**
      * The full deck serialised as a JSON array of objects, each with
@@ -70,6 +76,7 @@ public class Game implements Serializable {
 
 
     // Getters & setters
+    public int getMaxPlayers() { return maxPlayers; }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -107,5 +114,8 @@ public class Game implements Serializable {
     }
     public String getTimelineJson() { return timelineJson; }
     public void setTimelineJson(String timelineJson) { this.timelineJson = timelineJson; }
+
+    public String getGameMode() { return gameMode; }
+    public void setGameMode(String gameMode) { this.gameMode = gameMode; }
 
 }
