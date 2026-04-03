@@ -2,6 +2,8 @@ package ch.uzh.ifi.hase.soprafs26.entity;
 
 import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
 import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
+import ch.uzh.ifi.hase.soprafs26.constant.GameMode;
+
 
 import jakarta.persistence.*;
 import java.io.Serializable;
@@ -26,7 +28,7 @@ public class Game implements Serializable {
     private Long id;
 
     @Column
-    private String gameMode;
+    private GameMode gameMode;
 
 
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -115,7 +117,7 @@ public class Game implements Serializable {
     public String getTimelineJson() { return timelineJson; }
     public void setTimelineJson(String timelineJson) { this.timelineJson = timelineJson; }
 
-    public String getGameMode() { return gameMode; }
-    public void setGameMode(String gameMode) { this.gameMode = gameMode; }
+    public GameMode getGameMode() { return gameMode; }
+    public void setGameMode(GameMode gameMode) { this.gameMode = gameMode; }
 
 }

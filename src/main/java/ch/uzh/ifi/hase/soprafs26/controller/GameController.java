@@ -1,6 +1,5 @@
 package ch.uzh.ifi.hase.soprafs26.controller;
 
-import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
 import ch.uzh.ifi.hase.soprafs26.entity.EventCard;
 import ch.uzh.ifi.hase.soprafs26.entity.Game;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.EventCardGetDTO;
@@ -9,11 +8,14 @@ import ch.uzh.ifi.hase.soprafs26.rest.dto.GameGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.JoinGameDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.PlacementResultDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.GameSettingsPutDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.mapper.DTOMapper;
 import ch.uzh.ifi.hase.soprafs26.service.GameService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
+import ch.uzh.ifi.hase.soprafs26.constant.GameMode;
+import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
 
 import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
 
@@ -70,6 +72,18 @@ public class GameController {
         Game game = gameService.startGame(gameId, deckSize);
         return toGameGetDTO(game);
     }
+
+    @PutMapping("/games/{gameId}/settings")
+    @ResponseStatus(HttpStatus.OK)
+    @ResponseBody
+    public GameGetDTO putSettings(
+            @PathVariable Long gameId,
+            @RequestBody GameSettingsPutDTO gameSettingsPutDTO) {
+
+        Game game = gameService.updateSettings(gameId, gameSettingsPutDTO);
+        return toGameGetDTO(game);
+    }
+
 
     @PostMapping("/games/{gameId}/draw")
     @ResponseStatus(HttpStatus.OK)
