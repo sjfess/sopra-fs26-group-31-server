@@ -1,6 +1,5 @@
 package ch.uzh.ifi.hase.soprafs26.controller;
 
-import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
 import ch.uzh.ifi.hase.soprafs26.entity.EventCard;
 import ch.uzh.ifi.hase.soprafs26.entity.Game;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.CreateGameDTO;
@@ -9,6 +8,7 @@ import ch.uzh.ifi.hase.soprafs26.rest.dto.EventCardRevealDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GameGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.GameSettingsPutDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.JoinGameDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.PlaceMoveDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.PlacementResultDTO;
@@ -66,6 +66,16 @@ public class GameController {
             @PathVariable Long gameId,
             @RequestParam(value = "deckSize", defaultValue = "40") int deckSize) {
         Game game = gameService.startGame(gameId, deckSize);
+        return toGameGetDTO(game);
+    }
+
+    @PutMapping("/games/{gameId}/settings")
+    @ResponseStatus(HttpStatus.OK)
+    @ResponseBody
+    public GameGetDTO putSettings(
+            @PathVariable Long gameId,
+            @RequestBody GameSettingsPutDTO gameSettingsPutDTO) {
+        Game game = gameService.updateSettings(gameId, gameSettingsPutDTO);
         return toGameGetDTO(game);
     }
 

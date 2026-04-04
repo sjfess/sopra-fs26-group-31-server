@@ -1,6 +1,6 @@
 package ch.uzh.ifi.hase.soprafs26.service;
 
-import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
+
 import ch.uzh.ifi.hase.soprafs26.entity.EventCard;
 import ch.uzh.ifi.hase.soprafs26.entity.Game;
 import ch.uzh.ifi.hase.soprafs26.entity.GamePlayer;
@@ -9,6 +9,7 @@ import ch.uzh.ifi.hase.soprafs26.repository.GamePlayerRepository;
 import ch.uzh.ifi.hase.soprafs26.repository.GameRepository;
 import ch.uzh.ifi.hase.soprafs26.repository.UserRepository;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.GameSettingsPutDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -16,6 +17,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
+import ch.uzh.ifi.hase.soprafs26.constant.GameMode;
+import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
+
+
 
 import java.time.Duration;
 import java.time.Instant;
@@ -566,7 +571,28 @@ public class GameService {
                 gameRepository.save(game);
             }
         }
-    } 
+    }
+    public Game updateSettings(Long gameId, GameSettingsPutDTO dto) {
+        Game game = findGameOrThrow(gameId);
+
+        if (!"WAITING".equals(game.getStatus())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Cannot change settings after the game has started");
+        }
+
+        if (dto.getDifficulty() != null) {
+            game.setDifficulty(dto.getDifficulty());
+        }
+        if (dto.getEra() != null) {
+            game.setEra(dto.getEra());
+        }
+        if (dto.getGameMode() != null) {
+            game.setGameMode(dto.getGameMode());
+        }
+
+        return gameRepository.save(game);
+    }
   
     public List<FinalResultDTO> finalizeGame(Long gameId) {
         Game game = findGameOrThrow(gameId);
