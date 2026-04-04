@@ -8,6 +8,7 @@ public class FinalResultDTO {
     private Integer correctPlacements;
     private Integer incorrectPlacements;
     private Boolean winner;
+    private Integer bestStreak;
 
     public Long getUserId() {
         return userId;
@@ -55,5 +56,13 @@ public class FinalResultDTO {
 
     public void setWinner(Boolean winner) {
         this.winner = winner;
+    }
+
+    public Integer getBestStreak() {
+        return bestStreak;
+    }
+
+    public void setBestStreak(Integer bestStreak) {
+        this.bestStreak = bestStreak;
     }
 }

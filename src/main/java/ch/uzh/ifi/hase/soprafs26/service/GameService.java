@@ -42,6 +42,12 @@ public class GameService {
     private final WikidataService wikidataService;
     private final Random random = new Random();
 
+    // helpers for bonus: streak and timer calculation
+    private static final int TURN_LIMIT_SECONDS = 30;
+    private static final int BASE_CORRECT_POINTS = 100;
+    private static final int TIME_BONUS_PER_SECOND = 2;
+    private static final int STREAK_BONUS_PER_STEP = 10;
+
     public GameService(
             GameRepository gameRepository,
             GamePlayerRepository gamePlayerRepository,
@@ -155,16 +161,22 @@ public class GameService {
         for (int i = 0; i < gamePlayers.size(); i++) {
             GamePlayer gamePlayer = gamePlayers.get(i);
             gamePlayer.setScore(0);
+
             if (i == 0) {
                 gamePlayer.setActiveTurn(true);
                 gamePlayer.setTurnStartedAt(Instant.now());
             } else {
                 gamePlayer.setActiveTurn(false);
+                gamePlayer.setTurnStartedAt(null);
             }
+
             gamePlayer.setCurrentCardIndex(null);
-            gamePlayerRepository.save(gamePlayer);
             gamePlayer.setCorrectPlacements(0);
             gamePlayer.setIncorrectPlacements(0);
+            gamePlayer.setCorrectStreak(0);
+            gamePlayer.setBestStreak(0);
+
+            gamePlayerRepository.save(gamePlayer);
         }
 
         game = gameRepository.save(game);
@@ -272,6 +284,15 @@ public class GameService {
 
         boolean correct = true;
 
+        long elapsedSeconds = 0;
+
+        if (activePlayer.getTurnStartedAt() != null) {
+            elapsedSeconds = Duration.between(activePlayer.getTurnStartedAt(), Instant.now()).getSeconds();
+        }
+
+        long remainingSeconds = Math.max(0, TURN_LIMIT_SECONDS - elapsedSeconds);
+        int timeBonus = (int) remainingSeconds * TIME_BONUS_PER_SECOND;
+
         if (position > 0) {
             EventCard before = timeline.get(position - 1);
             if (card.getYear() < before.getYear()) {
@@ -289,10 +310,22 @@ public class GameService {
         if (correct) {
             timeline.add(position, card);
             game.setTimelineJson(serializeDeck(timeline));
-            activePlayer.setScore(activePlayer.getScore() + 1);
+
+            int newStreak = activePlayer.getCorrectStreak() + 1;
+            activePlayer.setCorrectStreak(newStreak);
+
+            if (activePlayer.getBestStreak() == null || newStreak > activePlayer.getBestStreak()) {
+                activePlayer.setBestStreak(newStreak);
+            }
+
+            int streakBonus = Math.max(0, newStreak - 1) * STREAK_BONUS_PER_STEP;
+            int pointsAwarded = BASE_CORRECT_POINTS + timeBonus + streakBonus;
+
+            activePlayer.setScore(activePlayer.getScore() + pointsAwarded);
             activePlayer.setCorrectPlacements(activePlayer.getCorrectPlacements() + 1);
         } else {
             activePlayer.setIncorrectPlacements(activePlayer.getIncorrectPlacements() + 1);
+            activePlayer.setCorrectStreak(0);
         }
 
         activePlayer.setCurrentCardIndex(null);
@@ -330,6 +363,8 @@ public class GameService {
             dto.setScore(gamePlayer.getScore());
             dto.setTurnOrder(gamePlayer.getTurnOrder());
             dto.setActiveTurn(gamePlayer.getActiveTurn());
+            dto.setCorrectStreak(gamePlayer.getCorrectStreak());
+            dto.setBestStreak(gamePlayer.getBestStreak());
             scores.add(dto);
         }
 
@@ -550,7 +585,7 @@ public class GameService {
 
     @Scheduled(fixedDelay = 5000) // runs every 5 seconds
     public void checkTurnTimeouts() {
-        long turnLimitSeconds = 30; // configure as needed
+        long turnLimitSeconds = TURN_LIMIT_SECONDS; // configure as needed
 
         List<GamePlayer> activePlayers = gamePlayerRepository.findByActiveTurnTrue();
 
@@ -566,7 +601,10 @@ public class GameService {
                 log.info("Turn timeout for player {} in game {}",
                         player.getUser().getUsername(), game.getId());
 
-                // Advance to next player
+                player.setCorrectStreak(0);
+                player.setCurrentCardIndex(null);
+                gamePlayerRepository.save(player);
+
                 advanceTurn(game, player);
                 gameRepository.save(game);
             }
@@ -638,6 +676,7 @@ public class GameService {
             dto.setCorrectPlacements(correctPlacements);
             dto.setIncorrectPlacements(incorrectPlacements);
             dto.setWinner(winner);
+            dto.setBestStreak(gamePlayer.getBestStreak());
 
             finalResults.add(dto);
         }
