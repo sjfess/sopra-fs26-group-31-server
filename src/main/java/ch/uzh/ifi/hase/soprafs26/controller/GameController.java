@@ -2,28 +2,23 @@ package ch.uzh.ifi.hase.soprafs26.controller;
 
 import ch.uzh.ifi.hase.soprafs26.entity.EventCard;
 import ch.uzh.ifi.hase.soprafs26.entity.Game;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.CreateGameDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.EventCardGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.EventCardRevealDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GameGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
-import ch.uzh.ifi.hase.soprafs26.rest.dto.JoinGameDTO;
-import ch.uzh.ifi.hase.soprafs26.rest.dto.PlacementResultDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GameSettingsPutDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.JoinGameDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.PlaceMoveDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.PlacementResultDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.mapper.DTOMapper;
 import ch.uzh.ifi.hase.soprafs26.service.GameService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
-import ch.uzh.ifi.hase.soprafs26.constant.GameMode;
-import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
-
-import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
-
-import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 public class GameController {
@@ -37,11 +32,12 @@ public class GameController {
     @PostMapping("/games")
     @ResponseStatus(HttpStatus.CREATED)
     @ResponseBody
-    public GameGetDTO createGame(
-            @RequestParam("era") HistoricalEra era,
-            @RequestParam("difficulty") Difficulty difficulty,
-            @RequestParam("userId") Long userId) {
-        Game game = gameService.createGame(era, difficulty, userId);
+    public GameGetDTO createGame(@RequestBody CreateGameDTO createGameDTO) {
+        Game game = gameService.createGame(
+                createGameDTO.getEra(),
+                createGameDTO.getDifficulty(),
+                createGameDTO.getUserId()
+        );
         return toGameGetDTO(game);
     }
 
@@ -79,11 +75,9 @@ public class GameController {
     public GameGetDTO putSettings(
             @PathVariable Long gameId,
             @RequestBody GameSettingsPutDTO gameSettingsPutDTO) {
-
         Game game = gameService.updateSettings(gameId, gameSettingsPutDTO);
         return toGameGetDTO(game);
     }
-
 
     @PostMapping("/games/{gameId}/draw")
     @ResponseStatus(HttpStatus.OK)
@@ -123,15 +117,19 @@ public class GameController {
         return dtos;
     }
 
-    @PostMapping("/games/{gameId}/place")
+    @PostMapping("/games/{gameId}/moves")
     @ResponseStatus(HttpStatus.OK)
     @ResponseBody
-    public PlacementResultDTO placeCard(
+    public PlacementResultDTO placeMove(
             @PathVariable Long gameId,
-            @RequestParam("cardIndex") int cardIndex,
-            @RequestParam("position") int position) {
+            @RequestBody PlaceMoveDTO placeMoveDTO) {
 
-        Object[] result = gameService.placeCard(gameId, cardIndex, position);
+        Object[] result = gameService.placeCard(
+                gameId,
+                placeMoveDTO.getCardIndex(),
+                placeMoveDTO.getPosition()
+        );
+
         EventCard card = (EventCard) result[0];
         boolean correct = (boolean) result[1];
         int timelineSize = (int) result[2];
@@ -164,14 +162,6 @@ public class GameController {
         return gameService.getLiveScores(gameId);
     }
 
-    private GameGetDTO toGameGetDTO(Game game) {
-        GameGetDTO dto = DTOMapper.INSTANCE.convertEntityToGameGetDTO(game);
-        dto.setCardsRemaining(game.getDeckSize() - game.getNextCardIndex());
-        List<EventCard> timeline = gameService.getTimeline(game.getId());
-        dto.setTimelineSize(timeline.size());
-        return dto;
-    }
-
     @PostMapping("/games/{gameId}/finalize")
     @ResponseStatus(HttpStatus.OK)
     @ResponseBody
@@ -179,4 +169,11 @@ public class GameController {
         return gameService.finalizeGame(gameId);
     }
 
+    private GameGetDTO toGameGetDTO(Game game) {
+        GameGetDTO dto = DTOMapper.INSTANCE.convertEntityToGameGetDTO(game);
+        dto.setCardsRemaining(game.getDeckSize() - game.getNextCardIndex());
+        List<EventCard> timeline = gameService.getTimeline(game.getId());
+        dto.setTimelineSize(timeline.size());
+        return dto;
+    }
 }
