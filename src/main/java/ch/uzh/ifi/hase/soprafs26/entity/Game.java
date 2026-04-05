@@ -1,6 +1,9 @@
 package ch.uzh.ifi.hase.soprafs26.entity;
 
 import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
+import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
+import ch.uzh.ifi.hase.soprafs26.constant.GameMode;
+
 
 import jakarta.persistence.*;
 import java.io.Serializable;
@@ -24,10 +27,16 @@ public class Game implements Serializable {
     @GeneratedValue
     private Long id;
 
+    @Column
+    private GameMode gameMode;
+
 
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<GamePlayer> gamePlayers = new ArrayList<>();
 
+    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    private Difficulty difficulty;
 
     @Column(nullable = false, unique = true)
     private String lobbyCode;
@@ -39,6 +48,9 @@ public class Game implements Serializable {
     /** WAITING → IN_PROGRESS → FINISHED */
     @Column(nullable = false)
     private String status;
+
+    @Column
+    private final int maxPlayers = 8;
 
     /**
      * The full deck serialised as a JSON array of objects, each with
@@ -66,6 +78,7 @@ public class Game implements Serializable {
 
 
     // Getters & setters
+    public int getMaxPlayers() { return maxPlayers; }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -91,6 +104,9 @@ public class Game implements Serializable {
     public Long getHostId() { return hostId; }
     public void setHostId(Long hostId) { this.hostId = hostId; }
 
+    public Difficulty getDifficulty(){return difficulty;}
+    public void setDifficulty(Difficulty difficulty){this.difficulty = difficulty;}
+
     public List<GamePlayer> getGamePlayers() {
         return gamePlayers;
     }
@@ -100,5 +116,8 @@ public class Game implements Serializable {
     }
     public String getTimelineJson() { return timelineJson; }
     public void setTimelineJson(String timelineJson) { this.timelineJson = timelineJson; }
+
+    public GameMode getGameMode() { return gameMode; }
+    public void setGameMode(GameMode gameMode) { this.gameMode = gameMode; }
 
 }

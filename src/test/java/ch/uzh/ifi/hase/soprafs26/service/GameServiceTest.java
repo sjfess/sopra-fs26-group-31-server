@@ -20,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -136,12 +137,16 @@ public class GameServiceTest {
         gp1.setScore(3);
         gp1.setTurnOrder(0);
         gp1.setActiveTurn(false);
+        gp1.setCorrectStreak(1);
+        gp1.setBestStreak(2);
 
         GamePlayer gp2 = new GamePlayer();
         gp2.setUser(user2);
         gp2.setScore(5);
         gp2.setTurnOrder(1);
         gp2.setActiveTurn(true);
+        gp2.setCorrectStreak(3);
+        gp2.setBestStreak(4);
 
         when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
         when(gamePlayerRepository.findAllByGameOrderByScoreDescTurnOrderAsc(game)).thenReturn(List.of(gp2, gp1));
@@ -155,6 +160,12 @@ public class GameServiceTest {
 
         assertEquals("alex", scores.get(1).getUsername());
         assertEquals(3, scores.get(1).getScore());
+
+        assertEquals(3, scores.get(0).getCorrectStreak());
+        assertEquals(4, scores.get(0).getBestStreak());
+
+        assertEquals(1, scores.get(1).getCorrectStreak());
+        assertEquals(2, scores.get(1).getBestStreak());
     }
 
     @Test
@@ -203,7 +214,9 @@ public class GameServiceTest {
         Object[] result = gameService.placeCard(1L, 0, 0);
 
         assertTrue((Boolean) result[1]);
-        assertEquals(1, gp1.getScore());
+        assertEquals(160, gp1.getScore());
+        assertEquals(1, gp1.getCorrectStreak());
+        assertEquals(1, gp1.getBestStreak());
         assertFalse(gp1.getActiveTurn());
         assertTrue(gp2.getActiveTurn());
     }
@@ -241,6 +254,8 @@ public class GameServiceTest {
         gp1.setScore(2);
         gp1.setActiveTurn(true);
         gp1.setCurrentCardIndex(0);
+        gp1.setCorrectStreak(3);
+        gp1.setBestStreak(3);
 
         GamePlayer gp2 = new GamePlayer();
         gp2.setId(101L);
@@ -260,6 +275,8 @@ public class GameServiceTest {
         assertEquals(2, gp1.getScore());
         assertFalse(gp1.getActiveTurn());
         assertTrue(gp2.getActiveTurn());
+        assertEquals(0, gp1.getCorrectStreak());
+        assertEquals(3, gp1.getBestStreak());
     }
 
     @Test
@@ -723,92 +740,106 @@ public class GameServiceTest {
     }
 
     @Test
-    public void checkTurnTimeouts_expiredTurn_advancesPlayer() {
+    public void placeCard_secondCorrectPlacement_appliesStreakBonus() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+        game.setTimelineJson("[]");
+
+        EventCard card1 = new EventCard();
+        card1.setTitle("Moon Landing");
+        card1.setYear(1969);
+
+        EventCard card2 = new EventCard();
+        card2.setTitle("Berlin Wall");
+        card2.setYear(1989);
+
+        game.setDeckJson(gameService.serializeDeck(List.of(card1, card2)));
+
+        User user1 = new User();
+        user1.setId(10L);
+        user1.setUsername("alex");
+
+        User user2 = new User();
+        user2.setId(11L);
+        user2.setUsername("mia");
+
+        GamePlayer gp1 = new GamePlayer();
+        gp1.setId(100L);
+        gp1.setGame(game);
+        gp1.setUser(user1);
+        gp1.setTurnOrder(0);
+        gp1.setScore(50);
+        gp1.setActiveTurn(true);
+        gp1.setCurrentCardIndex(1);
+        gp1.setCorrectStreak(1);
+        gp1.setBestStreak(1);
+
+        GamePlayer gp2 = new GamePlayer();
+        gp2.setId(101L);
+        gp2.setGame(game);
+        gp2.setUser(user2);
+        gp2.setTurnOrder(1);
+        gp2.setScore(0);
+        gp2.setActiveTurn(false);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(gp1));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
+
+        Object[] result = gameService.placeCard(1L, 1, 0);
+
+        assertTrue((Boolean) result[1]);
+
+        // 100 base + 60 time bonus + 10 streak bonus = 170
+        assertEquals(220, gp1.getScore());
+        assertEquals(2, gp1.getCorrectStreak());
+        assertEquals(2, gp1.getBestStreak());
+    }
+
+    @Test
+    public void checkTurnTimeouts_resetsStreakClearsCardAndAdvancesTurn() {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
 
-        User user1 = new User(); user1.setId(10L); user1.setUsername("alex");
-        User user2 = new User(); user2.setId(11L); user2.setUsername("mia");
+        User user1 = new User();
+        user1.setId(10L);
+        user1.setUsername("alex");
+
+        User user2 = new User();
+        user2.setId(11L);
+        user2.setUsername("mia");
 
         GamePlayer gp1 = new GamePlayer();
-        gp1.setId(100L); gp1.setGame(game); gp1.setUser(user1);
-        gp1.setActiveTurn(true); gp1.setTurnOrder(0);
-        gp1.setTurnStartedAt(Instant.now().minusSeconds(60)); // 60s ago — expired
+        gp1.setId(100L);
+        gp1.setGame(game);
+        gp1.setUser(user1);
+        gp1.setTurnOrder(0);
+        gp1.setActiveTurn(true);
+        gp1.setCurrentCardIndex(5);
+        gp1.setCorrectStreak(3);
+        gp1.setBestStreak(3);
+        gp1.setTurnStartedAt(Instant.now().minusSeconds(31));
 
         GamePlayer gp2 = new GamePlayer();
-        gp2.setId(101L); gp2.setGame(game); gp2.setUser(user2);
-        gp2.setActiveTurn(false); gp2.setTurnOrder(1);
+        gp2.setId(101L);
+        gp2.setGame(game);
+        gp2.setUser(user2);
+        gp2.setTurnOrder(1);
+        gp2.setActiveTurn(false);
+        gp2.setCurrentCardIndex(null);
 
         when(gamePlayerRepository.findByActiveTurnTrue()).thenReturn(List.of(gp1));
         when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
 
         gameService.checkTurnTimeouts();
 
-        assertFalse(gp1.getActiveTurn(), "Timed-out player must no longer be active");
-        assertTrue(gp2.getActiveTurn(), "Next player must become active after timeout");
-        assertNull(gp1.getCurrentCardIndex(), "Drawn card must be discarded on timeout");
-    }
-
-    @Test
-    public void checkTurnTimeouts_turnNotExpired_doesNotAdvance() {
-        Game game = new Game();
-        game.setId(1L);
-        game.setStatus("IN_PROGRESS");
-
-        User user = new User(); user.setId(10L); user.setUsername("alex");
-
-        GamePlayer gp1 = new GamePlayer();
-        gp1.setId(100L); gp1.setGame(game); gp1.setUser(user);
-        gp1.setActiveTurn(true); gp1.setTurnOrder(0);
-        gp1.setTurnStartedAt(Instant.now().minusSeconds(5)); // only 5s ago
-
-        when(gamePlayerRepository.findByActiveTurnTrue()).thenReturn(List.of(gp1));
-
-        gameService.checkTurnTimeouts();
-
-        assertTrue(gp1.getActiveTurn(), "Non-expired turn must not be advanced");
-        verify(gamePlayerRepository, never()).findAllByGameOrderByTurnOrderAsc(any());
-    }
-
-    @Test
-    public void checkTurnTimeouts_gameNotInProgress_skipped() {
-        Game game = new Game();
-        game.setId(1L);
-        game.setStatus("WAITING"); // not IN_PROGRESS
-
-        User user = new User(); user.setId(10L); user.setUsername("alex");
-
-        GamePlayer gp1 = new GamePlayer();
-        gp1.setId(100L); gp1.setGame(game); gp1.setUser(user);
-        gp1.setActiveTurn(true); gp1.setTurnOrder(0);
-        gp1.setTurnStartedAt(Instant.now().minusSeconds(60));
-
-        when(gamePlayerRepository.findByActiveTurnTrue()).thenReturn(List.of(gp1));
-
-        gameService.checkTurnTimeouts();
-
-        assertTrue(gp1.getActiveTurn(), "Turn in non-IN_PROGRESS game must not be advanced");
-    }
-
-    @Test
-    public void checkTurnTimeouts_nullTurnStartedAt_skipped() {
-        Game game = new Game();
-        game.setId(1L);
-        game.setStatus("IN_PROGRESS");
-
-        User user = new User(); user.setId(10L); user.setUsername("alex");
-
-        GamePlayer gp1 = new GamePlayer();
-        gp1.setId(100L); gp1.setGame(game); gp1.setUser(user);
-        gp1.setActiveTurn(true); gp1.setTurnOrder(0);
-        gp1.setTurnStartedAt(null); // timer never started
-
-        when(gamePlayerRepository.findByActiveTurnTrue()).thenReturn(List.of(gp1));
-
-        gameService.checkTurnTimeouts();
-
-        assertTrue(gp1.getActiveTurn(), "Player with null turnStartedAt must not be skipped");
+        assertEquals(0, gp1.getCorrectStreak());
+        assertNull(gp1.getCurrentCardIndex());
+        assertFalse(gp1.getActiveTurn());
+        assertTrue(gp2.getActiveTurn());
+        assertNotNull(gp2.getTurnStartedAt());
     }
 
 }

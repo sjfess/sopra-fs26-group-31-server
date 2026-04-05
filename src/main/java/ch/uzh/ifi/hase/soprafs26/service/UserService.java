@@ -41,7 +41,7 @@ public class UserService {
         newUser.setPassword(hashedPassword);
 
         newUser.setToken(UUID.randomUUID().toString());
-        newUser.setStatus(UserStatus.OFFLINE);
+        newUser.setStatus(UserStatus.ONLINE);
         newUser.setCreationDate(Instant.now());
 
         if (newUser.getBio() == null) {

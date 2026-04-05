@@ -43,6 +43,12 @@ public class GamePlayer implements Serializable {
     @Column(nullable = false)
     private Integer incorrectPlacements = 0;
 
+    @Column(nullable = false)
+    private Integer correctStreak = 0;
+
+    @Column(nullable = false)
+    private Integer bestStreak = 0;
+
     public Long getId() {
         return id;
     }
@@ -118,4 +124,21 @@ public class GamePlayer implements Serializable {
     public void setIncorrectPlacements(Integer incorrectPlacements) {
         this.incorrectPlacements = incorrectPlacements;
     }
+
+    public Integer getCorrectStreak() {
+        return correctStreak;
+    }
+
+    public void setCorrectStreak(Integer correctStreak) {
+        this.correctStreak = correctStreak;
+    }
+
+    public Integer getBestStreak() {
+        return bestStreak;
+    }
+
+    public void setBestStreak(Integer bestStreak) {
+        this.bestStreak = bestStreak;
+    }
+
 }
