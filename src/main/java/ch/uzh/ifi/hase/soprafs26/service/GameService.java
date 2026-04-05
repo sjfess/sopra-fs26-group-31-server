@@ -686,6 +686,8 @@ public class GameService {
         userRepository.flush();
         gameRepository.flush();
 
+        gameRepository.delete(game);
+
         return finalResults;
     }
 }
