@@ -5,12 +5,14 @@ import ch.uzh.ifi.hase.soprafs26.entity.EventCard;
 import ch.uzh.ifi.hase.soprafs26.entity.Game;
 import ch.uzh.ifi.hase.soprafs26.entity.GamePlayer;
 import ch.uzh.ifi.hase.soprafs26.entity.User;
+import ch.uzh.ifi.hase.soprafs26.entity.ChatMessage;
 import ch.uzh.ifi.hase.soprafs26.repository.GamePlayerRepository;
+import ch.uzh.ifi.hase.soprafs26.repository.ChatMessageRepository;
 import ch.uzh.ifi.hase.soprafs26.repository.GameRepository;
 import ch.uzh.ifi.hase.soprafs26.repository.UserRepository;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GameSettingsPutDTO;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -20,6 +22,8 @@ import org.springframework.web.server.ResponseStatusException;
 import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
 import ch.uzh.ifi.hase.soprafs26.constant.GameMode;
 import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.ChatMessageDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.ChatMessageGetDTO;
 
 
 
@@ -42,6 +46,7 @@ public class GameService {
     private final UserRepository userRepository;
     private final WikidataService wikidataService;
     private final Random random = new Random();
+    private final ChatMessageRepository chatMessageRepository;
 
     // helpers for bonus: streak and timer calculation
     private static final int TURN_LIMIT_SECONDS = 30;
@@ -53,12 +58,14 @@ public class GameService {
             GameRepository gameRepository,
             GamePlayerRepository gamePlayerRepository,
             UserRepository userRepository,
-            WikidataService wikidataService
+            WikidataService wikidataService,
+            ChatMessageRepository chatMessageRepository
     ) {
         this.gameRepository = gameRepository;
         this.gamePlayerRepository = gamePlayerRepository;
         this.userRepository = userRepository;
         this.wikidataService = wikidataService;
+        this.chatMessageRepository = chatMessageRepository;
     }
 
     /**
@@ -648,6 +655,47 @@ public class GameService {
 
         return gameRepository.save(game);
     }
+
+    @Transactional
+    public ChatMessageGetDTO addChatMessage(Long gameId, Long playerId, String message) {
+        // Game existiert?
+        findGameOrThrow(gameId);
+
+        User user = userRepository.findById(playerId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User not found"));
+
+        ChatMessage msg = new ChatMessage();
+        msg.setGameId(gameId);
+        msg.setPlayerId(playerId);
+        msg.setUsername(user.getUsername());
+        msg.setMessage(message);
+        msg.setTimestamp(String.valueOf(System.currentTimeMillis()));
+        chatMessageRepository.save(msg);
+
+        ChatMessageGetDTO dto = new ChatMessageGetDTO();
+        dto.setPlayerId(playerId);
+        dto.setUsername(user.getUsername());
+        dto.setMessage(message);
+        dto.setTimestamp(msg.getTimestamp());
+        return dto;
+    }
+
+    public List<ChatMessageGetDTO> getChatMessages(Long gameId) {
+        findGameOrThrow(gameId); // 404 falls Game nicht existiert
+        return chatMessageRepository.findAllByGameIdOrderByTimestampAsc(gameId)
+                .stream()
+                .map(m -> {
+                    ChatMessageGetDTO dto = new ChatMessageGetDTO();
+                    dto.setPlayerId(m.getPlayerId());
+                    dto.setUsername(m.getUsername());
+                    dto.setMessage(m.getMessage());
+                    dto.setTimestamp(m.getTimestamp());
+                    return dto;
+                })
+                .toList();
+    }
+
     @Transactional
     public List<FinalResultDTO> finalizeGame(Long gameId) {
         Game game = findGameOrThrow(gameId);
