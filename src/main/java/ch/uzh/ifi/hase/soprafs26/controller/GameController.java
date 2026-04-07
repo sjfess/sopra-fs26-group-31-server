@@ -55,8 +55,8 @@ public class GameController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void leaveGame(
             @PathVariable String lobbyCode,
-            @RequestBody JoinGameDTO joinGameDTO) {
-        gameService.leaveGame(lobbyCode, joinGameDTO.getUserId());
+            @RequestParam Long userId) {
+        gameService.leaveGame(lobbyCode, userId);
     }
 
     @PutMapping("/games/{gameId}/start")

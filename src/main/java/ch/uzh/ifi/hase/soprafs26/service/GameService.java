@@ -581,6 +581,22 @@ public class GameService {
         }
 
         gamePlayerRepository.deleteByGameAndUser(game, user);
+
+        List<GamePlayer> remaining =
+                gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
+
+        // ── Fall 1: Letzter Spieler hat verlassen → Lobby löschen ──────────────
+        if (remaining.isEmpty()) {
+            gameRepository.delete(game);
+            return;
+        }
+
+        // ── Fall 2: Host hat verlassen → zufälligen neuen Host bestimmen ───────
+        if (game.getHostId().equals(userId)) {
+            GamePlayer newHost = remaining.get(random.nextInt(remaining.size()));
+            game.setHostId(newHost.getUser().getId());
+            gameRepository.save(game);
+        }
     }
 
     @Scheduled(fixedDelay = 5000) // runs every 5 seconds
