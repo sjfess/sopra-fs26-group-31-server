@@ -83,6 +83,8 @@ public interface DTOMapper {
     @Mapping(target = "cardsRemaining", ignore = true)
     @Mapping(source = "gamePlayers", target = "players")
     @Mapping(target = "timelineSize", ignore = true)
+    @Mapping(source = "maxPlayers", target = "maxPlayers")
+    @Mapping(source = "gameMode", target = "gameMode")
     GameGetDTO convertEntityToGameGetDTO(Game game);
 
     @Mapping(source = "user.id", target = "id")

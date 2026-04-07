@@ -5,6 +5,8 @@ import ch.uzh.ifi.hase.soprafs26.entity.GamePlayer;
 import ch.uzh.ifi.hase.soprafs26.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +24,8 @@ public interface GamePlayerRepository extends JpaRepository<GamePlayer, Long> {
 
     boolean existsByGameAndUser(Game game, User user);
 
+    @Modifying
+    @Transactional
     void deleteByGameAndUser(Game game, User user);
 
     List<GamePlayer> findByActiveTurnTrue();

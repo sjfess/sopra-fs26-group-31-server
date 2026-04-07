@@ -50,7 +50,7 @@ public class Game implements Serializable {
     private String status;
 
     @Column
-    private final int maxPlayers = 8;
+    private int maxPlayers = 8;
 
     /**
      * The full deck serialised as a JSON array of objects, each with
@@ -79,6 +79,7 @@ public class Game implements Serializable {
 
     // Getters & setters
     public int getMaxPlayers() { return maxPlayers; }
+    public void setMaxPlayers(int maxPlayers) { this.maxPlayers = maxPlayers; }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }

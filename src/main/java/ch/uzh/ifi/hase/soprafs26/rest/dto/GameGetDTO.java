@@ -18,6 +18,7 @@ public class GameGetDTO {
     private int timelineSize;
     private Difficulty difficulty;
     private GameMode gameMode;
+    private int maxPlayers;
 
     public Difficulty getDifficulty() { return difficulty; }
     public void setDifficulty(Difficulty difficulty) { this.difficulty = difficulty; }
@@ -51,4 +52,7 @@ public class GameGetDTO {
 
     public GameMode getGameMode() { return gameMode; }
     public void setGameMode(GameMode gameMode) { this.gameMode = gameMode; }
+
+    public int getMaxPlayers() { return maxPlayers; }
+    public void setMaxPlayers(int maxPlayers) { this.maxPlayers = maxPlayers; }
 }

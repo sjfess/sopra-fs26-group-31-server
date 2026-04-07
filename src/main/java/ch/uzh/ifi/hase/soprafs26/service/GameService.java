@@ -10,6 +10,7 @@ import ch.uzh.ifi.hase.soprafs26.repository.GameRepository;
 import ch.uzh.ifi.hase.soprafs26.repository.UserRepository;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GameSettingsPutDTO;
+import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -560,7 +561,7 @@ public class GameService {
         }
         return code.toString();
     }
-
+    @Transactional
     public void leaveGame(String lobbyCode, Long userId) {
         Game game = gameRepository.findByLobbyCode(lobbyCode)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -647,7 +648,7 @@ public class GameService {
 
         return gameRepository.save(game);
     }
-  
+    @Transactional
     public List<FinalResultDTO> finalizeGame(Long gameId) {
         Game game = findGameOrThrow(gameId);
 
