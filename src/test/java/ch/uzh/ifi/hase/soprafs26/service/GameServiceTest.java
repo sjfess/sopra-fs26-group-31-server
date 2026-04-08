@@ -16,6 +16,7 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
+import ch.uzh.ifi.hase.soprafs26.repository.ChatMessageRepository;
 
 import java.time.Instant;
 import java.util.List;
@@ -33,6 +34,7 @@ public class GameServiceTest {
     private WikidataService wikidataService;
     private GameService gameService;
     private UserRepository userRepository;
+    private ChatMessageRepository chatMessageRepository;
 
     @BeforeEach
     public void setup() {
@@ -41,7 +43,14 @@ public class GameServiceTest {
         gamePlayerRepository = Mockito.mock(GamePlayerRepository.class);
         wikidataService = Mockito.mock(WikidataService.class);
         userRepository = Mockito.mock(UserRepository.class);
-        gameService = new GameService(gameRepository, gamePlayerRepository, userRepository, wikidataService);
+        chatMessageRepository = Mockito.mock(ChatMessageRepository.class);
+        gameService = new GameService(
+                gameRepository,
+                gamePlayerRepository,
+                userRepository,
+                wikidataService,
+                chatMessageRepository
+        );
 
         when(gameRepository.save(any(Game.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(gamePlayerRepository.save(any(GamePlayer.class))).thenAnswer(invocation -> invocation.getArgument(0));
