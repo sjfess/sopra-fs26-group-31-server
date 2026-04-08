@@ -16,6 +16,9 @@ import ch.uzh.ifi.hase.soprafs26.rest.mapper.DTOMapper;
 import ch.uzh.ifi.hase.soprafs26.service.GameService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.ChatMessageDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.ChatMessageGetDTO;
+
 
 import java.util.ArrayList;
 import java.util.List;
@@ -57,6 +60,20 @@ public class GameController {
             @PathVariable String lobbyCode,
             @RequestParam Long userId) {
         gameService.leaveGame(lobbyCode, userId);
+    }
+
+    @PostMapping("/games/{gameId}/chat")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ChatMessageGetDTO sendMessage(
+            @PathVariable Long gameId,
+            @RequestBody ChatMessageDTO dto) {
+        return gameService.addChatMessage(gameId, dto.getPlayerId(), dto.getMessage());
+    }
+
+    @GetMapping("/games/{gameId}/chat")
+    @ResponseStatus(HttpStatus.OK)
+    public List<ChatMessageGetDTO> getMessages(@PathVariable Long gameId) {
+        return gameService.getChatMessages(gameId);
     }
 
     @PutMapping("/games/{gameId}/start")
