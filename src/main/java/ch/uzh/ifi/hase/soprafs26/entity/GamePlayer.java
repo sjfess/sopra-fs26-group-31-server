@@ -23,6 +23,9 @@ public class GamePlayer implements Serializable {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @Column(nullable = false)
+    private Integer cardsInHand = 0;
+
     @Column
     private Integer currentCardIndex;
 
@@ -139,6 +142,14 @@ public class GamePlayer implements Serializable {
 
     public void setBestStreak(Integer bestStreak) {
         this.bestStreak = bestStreak;
+    }
+
+    public Integer getCardsInHand() {
+        return cardsInHand;
+    }
+
+    public void setCardsInHand(Integer cardsInHand) {
+        this.cardsInHand = cardsInHand;
     }
 
 }
