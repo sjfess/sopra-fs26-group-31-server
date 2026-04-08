@@ -53,6 +53,7 @@ public class GameService {
     private static final int BASE_CORRECT_POINTS = 100;
     private static final int TIME_BONUS_PER_SECOND = 2;
     private static final int STREAK_BONUS_PER_STEP = 10;
+    private static final int INITIAL_HAND_SIZE = 5;
 
     public GameService(
             GameRepository gameRepository,
@@ -88,6 +89,7 @@ public class GameService {
         game.setNextCardIndex(0);
         game.setDeckSize(0);
         game.setTimelineJson("[]");
+        game.setGameMode(GameMode.TIMELINE);
 
         game = gameRepository.save(game);
         log.info("Created game {} with lobby code {} for era {}",
@@ -99,6 +101,12 @@ public class GameService {
         hostPlayer.setTurnOrder(0);
         hostPlayer.setActiveTurn(false);
         hostPlayer.setCurrentCardIndex(null);
+        hostPlayer.setCorrectPlacements(0);
+        hostPlayer.setIncorrectPlacements(0);
+        hostPlayer.setCorrectStreak(0);
+        hostPlayer.setBestStreak(0);
+        hostPlayer.setCardsInHand(0);
+        hostPlayer.setTurnStartedAt(null);
         gamePlayerRepository.save(hostPlayer);
         return game;
     }
@@ -134,6 +142,13 @@ public class GameService {
         gamePlayer.setTurnOrder(existingPlayers.size());
         gamePlayer.setActiveTurn(false);
         gamePlayer.setCurrentCardIndex(null);
+
+        gamePlayer.setCorrectPlacements(0);
+        gamePlayer.setIncorrectPlacements(0);
+        gamePlayer.setCorrectStreak(0);
+        gamePlayer.setBestStreak(0);
+        gamePlayer.setCardsInHand(0);
+        gamePlayer.setTurnStartedAt(null);
 
         gamePlayerRepository.save(gamePlayer);
         return game;
@@ -183,6 +198,7 @@ public class GameService {
             gamePlayer.setIncorrectPlacements(0);
             gamePlayer.setCorrectStreak(0);
             gamePlayer.setBestStreak(0);
+            gamePlayer.setCardsInHand(INITIAL_HAND_SIZE);
 
             gamePlayerRepository.save(gamePlayer);
         }
@@ -212,6 +228,12 @@ public class GameService {
         int index = game.getNextCardIndex();
 
         if (index >= deck.size()) {
+            if (isTimelineGameFinished(game)) {
+                finalizeGame(game.getId());
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Game finished because no cards are left in the deck");
+            }
+
             throw new ResponseStatusException(HttpStatus.GONE,
                     "No cards left in the deck");
         }
@@ -253,6 +275,34 @@ public class GameService {
 
     public Game getGame(Long gameId) {
         return findGameOrThrow(gameId);
+    }
+    /**
+     *  Helper method to determine how many players are done.
+     */
+
+    private int getFinishedPlayerCount(Game game) {
+        List<GamePlayer> players = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
+
+        int finishedCount = 0;
+        for (GamePlayer player : players) {
+            if (player.getCardsInHand() != null && player.getCardsInHand() <= 0) {
+                finishedCount++;
+            }
+        }
+        return finishedCount;
+    }
+
+    /**
+     *  Helper method to determine how many players have to be done.
+     */
+    private int getRequiredFinishedPlayers(Game game) {
+        List<GamePlayer> players = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
+        int playerCount = players.size();
+
+        if (playerCount <= 3) {
+            return playerCount;
+        }
+        return 3;
     }
 
     /**
@@ -331,16 +381,25 @@ public class GameService {
 
             activePlayer.setScore(activePlayer.getScore() + pointsAwarded);
             activePlayer.setCorrectPlacements(activePlayer.getCorrectPlacements() + 1);
+            activePlayer.setCardsInHand(activePlayer.getCardsInHand() - 1);
         } else {
             activePlayer.setIncorrectPlacements(activePlayer.getIncorrectPlacements() + 1);
             activePlayer.setCorrectStreak(0);
         }
 
         activePlayer.setCurrentCardIndex(null);
-        gamePlayerRepository.save(activePlayer);
 
-        advanceTurn(game, activePlayer);
-        gameRepository.save(game);
+        if (isTimelineGameFinished(game)) {
+            activePlayer.setActiveTurn(false);
+            gamePlayerRepository.save(activePlayer);
+            gameRepository.save(game);
+            finalizeGame(game.getId());
+        } else {
+            gamePlayerRepository.save(activePlayer);
+            gameRepository.save(game);
+            advanceTurn(game, activePlayer);
+            gameRepository.save(game);
+        }
 
         log.info("Game {} – player {} placed card '{}' ({}) at position {}: {}",
                 gameId,
@@ -627,10 +686,19 @@ public class GameService {
 
                 player.setCorrectStreak(0);
                 player.setCurrentCardIndex(null);
-                gamePlayerRepository.save(player);
 
-                advanceTurn(game, player);
-                gameRepository.save(game);
+                if (isTimelineGameFinished(game)) {
+                    player.setActiveTurn(false);
+                    gamePlayerRepository.save(player);
+                    gameRepository.save(game);
+                    finalizeGame(game.getId());
+                }
+                else {
+                    gamePlayerRepository.save(player);
+                    gameRepository.save(game);
+                    advanceTurn(game, player);
+                    gameRepository.save(game);
+                }
             }
         }
     }
@@ -751,8 +819,24 @@ public class GameService {
         userRepository.flush();
         gameRepository.flush();
 
-        gameRepository.delete(game);
+        //gameRepository.delete(game);
 
         return finalResults;
+    }
+
+
+    private boolean isTimelineGameFinished(Game game) {
+        if (game.getGameMode() != GameMode.TIMELINE) {
+            return false;
+        }
+
+        if (game.getNextCardIndex() >= game.getDeckSize()) {
+            return true;
+        }
+
+        int finishedPlayers = getFinishedPlayerCount(game);
+        int requiredFinishedPlayers = getRequiredFinishedPlayers(game);
+
+        return finishedPlayers >= requiredFinishedPlayers;
     }
 }

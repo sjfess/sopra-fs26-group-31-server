@@ -27,6 +27,7 @@ public class Game implements Serializable {
     @GeneratedValue
     private Long id;
 
+    @Enumerated(EnumType.STRING)
     @Column
     private GameMode gameMode;
 

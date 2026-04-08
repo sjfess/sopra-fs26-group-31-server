@@ -156,8 +156,10 @@ public class GamePlayerRepositoryIntegrationTest {
         game.setEra(HistoricalEra.MODERN);
         game.setStatus("IN_PROGRESS");
         game.setHostId(user.getId());
+        game.setDifficulty(Difficulty.EASY);
         game.setDeckSize(0);
         game.setNextCardIndex(0);
+        game.setDeckJson("[]");
         game.setTimelineJson("[]");
         game = gameRepository.saveAndFlush(game);
 
