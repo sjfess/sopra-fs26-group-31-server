@@ -3,6 +3,7 @@ package ch.uzh.ifi.hase.soprafs26.controller;
 import ch.uzh.ifi.hase.soprafs26.entity.FriendRequest;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.FriendRequestGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.FriendRequestPostDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.FriendRequestPutDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.mapper.DTOMapper;
 import ch.uzh.ifi.hase.soprafs26.service.FriendRequestService;
 import org.springframework.http.HttpStatus;
@@ -20,72 +21,37 @@ public class FriendRequestController {
         this.friendRequestService = friendRequestService;
     }
 
-    @PostMapping("/friendRequests")
+    @PostMapping("/friend-requests")
     @ResponseStatus(HttpStatus.CREATED)
     @ResponseBody
     public FriendRequestGetDTO sendFriendRequest(
-            @RequestHeader("Authorization") String token,
             @RequestBody FriendRequestPostDTO friendRequestPostDTO) {
 
-        FriendRequest createdRequest = friendRequestService.sendFriendRequest(
-                token,
-                friendRequestPostDTO.getReceiverId()
+        FriendRequest created = friendRequestService.sendFriendRequest(
+                friendRequestPostDTO.getSenderId(),
+                friendRequestPostDTO.getReceiverUsername()
         );
 
-        return DTOMapper.INSTANCE.convertEntityToFriendRequestGetDTO(createdRequest);
+        return DTOMapper.INSTANCE.convertEntityToFriendRequestGetDTO(created);
     }
 
-    @PutMapping("/friendRequests/{requestId}/accept")
+
+    @PutMapping("/friend-requests/{requestId}")
     @ResponseStatus(HttpStatus.OK)
     @ResponseBody
-    public FriendRequestGetDTO acceptFriendRequest(
-            @RequestHeader("Authorization") String token,
-            @PathVariable Long requestId) {
+    public FriendRequestGetDTO respondToFriendRequest(
+            @PathVariable long requestId,
+            @RequestBody FriendRequestPutDTO friendRequestPutDTO) {
 
-        FriendRequest acceptedRequest = friendRequestService.acceptFriendRequest(token, requestId);
-        return DTOMapper.INSTANCE.convertEntityToFriendRequestGetDTO(acceptedRequest);
+        FriendRequest updated = friendRequestService.respondToFriendRequest(
+                requestId,
+                friendRequestPutDTO.getReceiverId(),
+                friendRequestPutDTO.getAction()
+        );
+        return DTOMapper.INSTANCE.convertEntityToFriendRequestGetDTO(updated);
     }
 
-    @PutMapping("/friendRequests/{requestId}/decline")
-    @ResponseStatus(HttpStatus.OK)
-    @ResponseBody
-    public FriendRequestGetDTO declineFriendRequest(
-            @RequestHeader("Authorization") String token,
-            @PathVariable Long requestId) {
 
-        FriendRequest declinedRequest = friendRequestService.declineFriendRequest(token, requestId);
-        return DTOMapper.INSTANCE.convertEntityToFriendRequestGetDTO(declinedRequest);
     }
 
-    @GetMapping("/friendRequests/incoming")
-    @ResponseStatus(HttpStatus.OK)
-    @ResponseBody
-    public List<FriendRequestGetDTO> getIncomingPendingRequests(
-            @RequestHeader("Authorization") String token) {
 
-        List<FriendRequest> requests = friendRequestService.getIncomingPendingRequests(token);
-        List<FriendRequestGetDTO> friendRequestGetDTOs = new ArrayList<>();
-
-        for (FriendRequest request : requests) {
-            friendRequestGetDTOs.add(DTOMapper.INSTANCE.convertEntityToFriendRequestGetDTO(request));
-        }
-
-        return friendRequestGetDTOs;
-    }
-
-    @GetMapping("/friendRequests/outgoing")
-    @ResponseStatus(HttpStatus.OK)
-    @ResponseBody
-    public List<FriendRequestGetDTO> getOutgoingPendingRequests(
-            @RequestHeader("Authorization") String token) {
-
-        List<FriendRequest> requests = friendRequestService.getOutgoingPendingRequests(token);
-        List<FriendRequestGetDTO> friendRequestGetDTOs = new ArrayList<>();
-
-        for (FriendRequest request : requests) {
-            friendRequestGetDTOs.add(DTOMapper.INSTANCE.convertEntityToFriendRequestGetDTO(request));
-        }
-
-        return friendRequestGetDTOs;
-    }
-}

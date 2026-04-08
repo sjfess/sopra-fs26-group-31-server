@@ -90,4 +90,6 @@ public interface DTOMapper {
     @Mapping(source = "user.id", target = "id")
     @Mapping(source = "user.username", target = "username")
     PlayerSummaryDTO convertGamePlayerToPlayerSummaryDTO(GamePlayer gamePlayer);
+
+
 }

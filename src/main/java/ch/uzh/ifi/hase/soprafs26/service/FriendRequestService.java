@@ -32,9 +32,9 @@ public class FriendRequestService {
         this.userRepository = userRepository;
     }
 
-    public FriendRequest sendFriendRequest(String senderToken, Long receiverId) {
-        User sender = getUserByToken(senderToken);
-        User receiver = getUserById(receiverId);
+    public FriendRequest sendFriendRequest(Long senderId, String receiverUsername) {
+        User sender = getUserById(senderId);
+        User receiver = getUserByUsername(receiverUsername);
 
         if (sender.getId().equals(receiver.getId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -75,13 +75,13 @@ public class FriendRequestService {
         return friendRequest;
     }
 
-    public FriendRequest acceptFriendRequest(String receiverToken, Long requestId) {
-        User receiver = getUserByToken(receiverToken);
+    public FriendRequest respondToFriendRequest(Long requestId, Long receiverId, String action) {
+        User receiver = getUserById(receiverId);
         FriendRequest friendRequest = getFriendRequestById(requestId);
 
         if (!friendRequest.getReceiver().getId().equals(receiver.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "You are not allowed to accept this friend request.");
+                    "You are not allowed to respond to this friend request.");
         }
 
         if (friendRequest.getStatus() != FriendRequestStatus.PENDING) {
@@ -89,62 +89,33 @@ public class FriendRequestService {
                     "This friend request is no longer pending.");
         }
 
-        User sender = friendRequest.getSender();
-
-        sender.getFriends().add(receiver);
-        receiver.getFriends().add(sender);
-
-        friendRequest.setStatus(FriendRequestStatus.ACCEPTED);
-
-        userRepository.save(sender);
-        userRepository.save(receiver);
-        friendRequestRepository.save(friendRequest);
-        friendRequestRepository.flush();
-
-        log.debug("Friend request {} accepted by user {}", requestId, receiver.getId());
-        return friendRequest;
-    }
-
-    public FriendRequest declineFriendRequest(String receiverToken, Long requestId) {
-        User receiver = getUserByToken(receiverToken);
-        FriendRequest friendRequest = getFriendRequestById(requestId);
-
-        if (!friendRequest.getReceiver().getId().equals(receiver.getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "You are not allowed to decline this friend request.");
+        if ("ACCEPT".equalsIgnoreCase(action)) {
+            User sender = friendRequest.getSender();
+            sender.getFriends().add(receiver);
+            receiver.getFriends().add(sender);
+            userRepository.save(sender);
+            userRepository.save(receiver);
+            friendRequest.setStatus(FriendRequestStatus.ACCEPTED);
+        } else if ("DENY".equalsIgnoreCase(action)) {
+            friendRequest.setStatus(FriendRequestStatus.DECLINED);
+        } else {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Invalid action. Use 'ACCEPT' or 'DENY'.");
         }
 
-        if (friendRequest.getStatus() != FriendRequestStatus.PENDING) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "This friend request is no longer pending.");
-        }
-
-        friendRequest.setStatus(FriendRequestStatus.DECLINED);
         friendRequest = friendRequestRepository.save(friendRequest);
         friendRequestRepository.flush();
-
-        log.debug("Friend request {} declined by user {}", requestId, receiver.getId());
         return friendRequest;
     }
 
-    public List<FriendRequest> getIncomingPendingRequests(String userToken) {
-        User user = getUserByToken(userToken);
+    public List<FriendRequest> getIncomingPendingRequests(Long userId) {
+        User user = getUserById(userId);
         return friendRequestRepository.findAllByReceiverAndStatus(user, FriendRequestStatus.PENDING);
     }
 
-    public List<FriendRequest> getOutgoingPendingRequests(String userToken) {
-        User user = getUserByToken(userToken);
+    public List<FriendRequest> getOutgoingPendingRequests(Long userId) {
+        User user = getUserById(userId);
         return friendRequestRepository.findAllBySenderAndStatus(user, FriendRequestStatus.PENDING);
-    }
-
-    private User getUserByToken(String token) {
-        User user = userRepository.findByToken(token);
-
-        if (user == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid token.");
-        }
-
-        return user;
     }
 
     private User getUserById(Long userId) {
@@ -157,5 +128,15 @@ public class FriendRequestService {
         return friendRequestRepository.findById(requestId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Friend request with id " + requestId + " was not found."));
+    }
+
+    private User getUserByUsername(String username) {
+        User user = userRepository.findByUsername(username);
+        if (user == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "User with username '" + username + "' was not found.");
+        }
+        return user;
     }
 }
