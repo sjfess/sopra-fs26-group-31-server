@@ -16,7 +16,11 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
+import ch.uzh.ifi.hase.soprafs26.repository.ChatMessageRepository;
+import ch.uzh.ifi.hase.soprafs26.repository.GameInviteRepository;
 
+
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -31,6 +35,8 @@ public class GameServiceTest {
     private WikidataService wikidataService;
     private GameService gameService;
     private UserRepository userRepository;
+    private ChatMessageRepository chatMessageRepository;
+    private GameInviteRepository gameInviteRepository;
 
     @BeforeEach
     public void setup() {
@@ -39,7 +45,16 @@ public class GameServiceTest {
         gamePlayerRepository = Mockito.mock(GamePlayerRepository.class);
         wikidataService = Mockito.mock(WikidataService.class);
         userRepository = Mockito.mock(UserRepository.class);
-        gameService = new GameService(gameRepository, gamePlayerRepository, userRepository, wikidataService);
+        chatMessageRepository = Mockito.mock(ChatMessageRepository.class);
+        gameInviteRepository = Mockito.mock(GameInviteRepository.class);
+        gameService = new GameService(
+                gameRepository,
+                gamePlayerRepository,
+                userRepository,
+                wikidataService,
+                chatMessageRepository,
+                gameInviteRepository
+        );
 
         when(gameRepository.save(any(Game.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(gamePlayerRepository.save(any(GamePlayer.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -102,6 +117,13 @@ public class GameServiceTest {
         assertFalse(gp2.getActiveTurn());
         assertNotNull(gp1.getTurnStartedAt(), "First player's turn timer must be set on game start");
         assertNull(gp2.getTurnStartedAt(), "Non-active players must not have a turn timer");
+
+        assertEquals(5, gp1.getCardsInHand());
+        assertEquals(5, gp2.getCardsInHand());
+        assertEquals(0, gp1.getCorrectStreak());
+        assertEquals(0, gp1.getBestStreak());
+        assertEquals(0, gp2.getCorrectStreak());
+        assertEquals(0, gp2.getBestStreak());
     }
 
     @Test
@@ -135,12 +157,18 @@ public class GameServiceTest {
         gp1.setScore(3);
         gp1.setTurnOrder(0);
         gp1.setActiveTurn(false);
+        gp1.setCorrectStreak(1);
+        gp1.setBestStreak(2);
+        gp1.setCardsInHand(2);
 
         GamePlayer gp2 = new GamePlayer();
         gp2.setUser(user2);
         gp2.setScore(5);
         gp2.setTurnOrder(1);
         gp2.setActiveTurn(true);
+        gp2.setCorrectStreak(3);
+        gp2.setBestStreak(4);
+        gp2.setCardsInHand(4);
 
         when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
         when(gamePlayerRepository.findAllByGameOrderByScoreDescTurnOrderAsc(game)).thenReturn(List.of(gp2, gp1));
@@ -154,6 +182,12 @@ public class GameServiceTest {
 
         assertEquals("alex", scores.get(1).getUsername());
         assertEquals(3, scores.get(1).getScore());
+
+        assertEquals(3, scores.get(0).getCorrectStreak());
+        assertEquals(4, scores.get(0).getBestStreak());
+
+        assertEquals(1, scores.get(1).getCorrectStreak());
+        assertEquals(2, scores.get(1).getBestStreak());
     }
 
     @Test
@@ -186,6 +220,7 @@ public class GameServiceTest {
         gp1.setScore(0);
         gp1.setActiveTurn(true);
         gp1.setCurrentCardIndex(0);
+        gp1.setCardsInHand(5);
 
         GamePlayer gp2 = new GamePlayer();
         gp2.setId(101L);
@@ -194,6 +229,7 @@ public class GameServiceTest {
         gp2.setTurnOrder(1);
         gp2.setScore(0);
         gp2.setActiveTurn(false);
+        gp2.setCardsInHand(5);
 
         when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
         when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(gp1));
@@ -202,9 +238,13 @@ public class GameServiceTest {
         Object[] result = gameService.placeCard(1L, 0, 0);
 
         assertTrue((Boolean) result[1]);
-        assertEquals(1, gp1.getScore());
+        assertEquals(160, gp1.getScore());
+        assertEquals(1, gp1.getCorrectStreak());
+        assertEquals(1, gp1.getBestStreak());
         assertFalse(gp1.getActiveTurn());
         assertTrue(gp2.getActiveTurn());
+        assertEquals(4, gp1.getCardsInHand());
+
     }
 
     @Test
@@ -240,6 +280,9 @@ public class GameServiceTest {
         gp1.setScore(2);
         gp1.setActiveTurn(true);
         gp1.setCurrentCardIndex(0);
+        gp1.setCorrectStreak(3);
+        gp1.setBestStreak(3);
+        gp1.setCardsInHand(5);
 
         GamePlayer gp2 = new GamePlayer();
         gp2.setId(101L);
@@ -248,6 +291,7 @@ public class GameServiceTest {
         gp2.setTurnOrder(1);
         gp2.setScore(0);
         gp2.setActiveTurn(false);
+        gp2.setCardsInHand(5);
 
         when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
         when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(gp1));
@@ -259,6 +303,9 @@ public class GameServiceTest {
         assertEquals(2, gp1.getScore());
         assertFalse(gp1.getActiveTurn());
         assertTrue(gp2.getActiveTurn());
+        assertEquals(0, gp1.getCorrectStreak());
+        assertEquals(3, gp1.getBestStreak());
+        assertEquals(5, gp1.getCardsInHand());
     }
 
     @Test
@@ -556,6 +603,7 @@ public class GameServiceTest {
         gp1.setScore(0);
         gp1.setActiveTurn(true);
         gp1.setCurrentCardIndex(0);
+        gp1.setCardsInHand(5);
 
         GamePlayer gp2 = new GamePlayer();
         gp2.setId(101L);
@@ -565,6 +613,7 @@ public class GameServiceTest {
         gp2.setScore(0);
         gp2.setActiveTurn(false);
         gp2.setCurrentCardIndex(null);
+        gp2.setCardsInHand(5);
 
         when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
         when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(gp1));
@@ -573,6 +622,7 @@ public class GameServiceTest {
         gameService.placeCard(1L, 0, 0);
 
         assertNull(gp1.getCurrentCardIndex());
+        assertEquals(4, gp1.getCardsInHand());
     }
 
     @Test
@@ -719,6 +769,114 @@ public class GameServiceTest {
         );
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+    }
+
+    @Test
+    public void placeCard_secondCorrectPlacement_appliesStreakBonus() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+        game.setTimelineJson("[]");
+
+        EventCard card1 = new EventCard();
+        card1.setTitle("Moon Landing");
+        card1.setYear(1969);
+
+        EventCard card2 = new EventCard();
+        card2.setTitle("Berlin Wall");
+        card2.setYear(1989);
+
+        game.setDeckJson(gameService.serializeDeck(List.of(card1, card2)));
+
+        User user1 = new User();
+        user1.setId(10L);
+        user1.setUsername("alex");
+
+        User user2 = new User();
+        user2.setId(11L);
+        user2.setUsername("mia");
+
+        GamePlayer gp1 = new GamePlayer();
+        gp1.setId(100L);
+        gp1.setGame(game);
+        gp1.setUser(user1);
+        gp1.setTurnOrder(0);
+        gp1.setScore(50);
+        gp1.setActiveTurn(true);
+        gp1.setCurrentCardIndex(1);
+        gp1.setCorrectStreak(1);
+        gp1.setBestStreak(1);
+        gp1.setCardsInHand(4);
+
+        GamePlayer gp2 = new GamePlayer();
+        gp2.setId(101L);
+        gp2.setGame(game);
+        gp2.setUser(user2);
+        gp2.setTurnOrder(1);
+        gp2.setScore(0);
+        gp2.setActiveTurn(false);
+        gp2.setCardsInHand(5);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(gp1));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
+
+        Object[] result = gameService.placeCard(1L, 1, 0);
+
+        assertTrue((Boolean) result[1]);
+
+        // 100 base + 60 time bonus + 10 streak bonus = 170
+        assertEquals(220, gp1.getScore());
+        assertEquals(2, gp1.getCorrectStreak());
+        assertEquals(2, gp1.getBestStreak());
+        assertEquals(3, gp1.getCardsInHand());
+    }
+
+    @Test
+    public void checkTurnTimeouts_resetsStreakClearsCardAndAdvancesTurn() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+
+        User user1 = new User();
+        user1.setId(10L);
+        user1.setUsername("alex");
+
+        User user2 = new User();
+        user2.setId(11L);
+        user2.setUsername("mia");
+
+        GamePlayer gp1 = new GamePlayer();
+        gp1.setId(100L);
+        gp1.setGame(game);
+        gp1.setUser(user1);
+        gp1.setTurnOrder(0);
+        gp1.setActiveTurn(true);
+        gp1.setCurrentCardIndex(5);
+        gp1.setCorrectStreak(3);
+        gp1.setBestStreak(3);
+        gp1.setTurnStartedAt(Instant.now().minusSeconds(31));
+        gp1.setCardsInHand(3);
+
+        GamePlayer gp2 = new GamePlayer();
+        gp2.setId(101L);
+        gp2.setGame(game);
+        gp2.setUser(user2);
+        gp2.setTurnOrder(1);
+        gp2.setActiveTurn(false);
+        gp2.setCurrentCardIndex(null);
+        gp2.setCardsInHand(5);
+
+        when(gamePlayerRepository.findByActiveTurnTrue()).thenReturn(List.of(gp1));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
+
+        gameService.checkTurnTimeouts();
+
+        assertEquals(0, gp1.getCorrectStreak());
+        assertNull(gp1.getCurrentCardIndex());
+        assertFalse(gp1.getActiveTurn());
+        assertTrue(gp2.getActiveTurn());
+        assertNotNull(gp2.getTurnStartedAt());
     }
 
 }

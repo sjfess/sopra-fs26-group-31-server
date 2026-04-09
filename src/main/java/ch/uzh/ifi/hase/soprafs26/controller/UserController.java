@@ -7,8 +7,11 @@ import ch.uzh.ifi.hase.soprafs26.entity.User;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.UserGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.UserPostDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.UserPutDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.FriendRequestGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.mapper.DTOMapper;
 import ch.uzh.ifi.hase.soprafs26.service.UserService;
+import ch.uzh.ifi.hase.soprafs26.service.FriendRequestService;
+
 
 import java.util.ArrayList;
 import java.util.List;
@@ -17,9 +20,11 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
+    private final FriendRequestService friendRequestService;
 
-    UserController(UserService userService) {
+    UserController(UserService userService, FriendRequestService friendRequestService) {
         this.userService = userService;
+        this.friendRequestService = friendRequestService;
     }
 
     @GetMapping("/users")
@@ -66,4 +71,30 @@ public class UserController {
                 userPutDTO.getBio()
         );
     }
+
+    @GetMapping("/users/{userId}/friends")
+    @ResponseStatus(HttpStatus.OK)
+    public List<UserGetDTO> getFriends(@PathVariable Long userId) {
+        List<User> friends = userService.getFriends(userId);
+        return friends.stream()
+                .map(DTOMapper.INSTANCE::convertEntityToUserGetDTO)
+                .toList(); }
+
+
+    @DeleteMapping("/users/{userId}/friends/{friendId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void removeFriend(@PathVariable Long userId, @PathVariable Long friendId) {
+        userService.removeFriend(userId, friendId);
+    }
+
+
+    @GetMapping("/users/{userId}/friend-requests")
+    @ResponseStatus(HttpStatus.OK)
+    public List<FriendRequestGetDTO> getFriendRequests(@PathVariable Long userId) {
+        return friendRequestService.getIncomingPendingRequests(userId)
+                .stream()
+                .map(DTOMapper.INSTANCE::convertEntityToFriendRequestGetDTO)
+                .toList();
+    }
+
 }

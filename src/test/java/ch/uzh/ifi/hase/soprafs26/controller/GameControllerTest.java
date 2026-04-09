@@ -3,10 +3,12 @@ package ch.uzh.ifi.hase.soprafs26.controller;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
+import ch.uzh.ifi.hase.soprafs26.entity.EventCard;
 import ch.uzh.ifi.hase.soprafs26.entity.Game;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.JoinGameDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.PlaceMoveDTO;
 import ch.uzh.ifi.hase.soprafs26.service.GameService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -135,6 +137,30 @@ public class GameControllerTest {
                 .andExpect(jsonPath("$[1].correctPlacements", is(3)))
                 .andExpect(jsonPath("$[1].incorrectPlacements", is(2)))
                 .andExpect(jsonPath("$[1].winner", is(false)));
+    }
+
+    @Test
+    public void placeMove_validInput_returnsPlacementResult() throws Exception {
+        EventCard card = new EventCard();
+        card.setTitle("Moon Landing");
+        card.setYear(1969);
+        card.setImageUrl("https://example.com/moon.jpg");
+
+        PlaceMoveDTO placeMoveDTO = new PlaceMoveDTO();
+        placeMoveDTO.setCardIndex(4);
+        placeMoveDTO.setPosition(1);
+
+        given(gameService.placeCard(1L, 4, 1)).willReturn(new Object[]{card, true, 3});
+
+        mockMvc.perform(post("/games/1/moves")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(asJsonString(placeMoveDTO)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.correct", is(true)))
+                .andExpect(jsonPath("$.title", is("Moon Landing")))
+                .andExpect(jsonPath("$.year", is(1969)))
+                .andExpect(jsonPath("$.imageUrl", is("https://example.com/moon.jpg")))
+                .andExpect(jsonPath("$.timelineSize", is(3)));
     }
 
     private String asJsonString(final Object object) {

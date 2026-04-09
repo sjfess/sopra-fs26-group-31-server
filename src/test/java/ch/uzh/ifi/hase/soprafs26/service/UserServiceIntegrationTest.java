@@ -50,7 +50,7 @@ public class UserServiceIntegrationTest {
         assertTrue(PasswordUtil.matches("testPassword", createdUser.getPassword(), createdUser.getSalt()));
 
         assertNotNull(createdUser.getToken());
-        assertEquals(UserStatus.OFFLINE, createdUser.getStatus());
+        assertEquals(UserStatus.ONLINE, createdUser.getStatus());
         assertNotNull(createdUser.getCreationDate());
         assertEquals("", createdUser.getBio());
         assertEquals(0, createdUser.getTotalGamesPlayed());

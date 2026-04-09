@@ -23,6 +23,9 @@ public class GamePlayer implements Serializable {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @Column(nullable = false)
+    private Integer cardsInHand = 0;
+
     @Column
     private Integer currentCardIndex;
 
@@ -42,6 +45,12 @@ public class GamePlayer implements Serializable {
 
     @Column(nullable = false)
     private Integer incorrectPlacements = 0;
+
+    @Column(nullable = false)
+    private Integer correctStreak = 0;
+
+    @Column(nullable = false)
+    private Integer bestStreak = 0;
 
     public Long getId() {
         return id;
@@ -100,9 +109,9 @@ public class GamePlayer implements Serializable {
     }
 
     public Instant getTurnStartedAt() { return turnStartedAt; }
-  
+
     public void setTurnStartedAt(Instant turnStartedAt) { this.turnStartedAt = turnStartedAt; }
-  
+
     public Integer getCorrectPlacements() {
         return correctPlacements;
     }
@@ -118,4 +127,29 @@ public class GamePlayer implements Serializable {
     public void setIncorrectPlacements(Integer incorrectPlacements) {
         this.incorrectPlacements = incorrectPlacements;
     }
+
+    public Integer getCorrectStreak() {
+        return correctStreak;
+    }
+
+    public void setCorrectStreak(Integer correctStreak) {
+        this.correctStreak = correctStreak;
+    }
+
+    public Integer getBestStreak() {
+        return bestStreak;
+    }
+
+    public void setBestStreak(Integer bestStreak) {
+        this.bestStreak = bestStreak;
+    }
+
+    public Integer getCardsInHand() {
+        return cardsInHand;
+    }
+
+    public void setCardsInHand(Integer cardsInHand) {
+        this.cardsInHand = cardsInHand;
+    }
+
 }
