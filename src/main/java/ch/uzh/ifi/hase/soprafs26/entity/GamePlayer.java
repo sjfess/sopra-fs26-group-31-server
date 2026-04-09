@@ -29,6 +29,9 @@ public class GamePlayer implements Serializable {
     @Column
     private Integer currentCardIndex;
 
+    @Column(columnDefinition = "TEXT")
+    private String handIndicesJson;
+
     @Column(nullable = false)
     private Integer score = 0;
 
@@ -150,6 +153,14 @@ public class GamePlayer implements Serializable {
 
     public void setCardsInHand(Integer cardsInHand) {
         this.cardsInHand = cardsInHand;
+    }
+
+    public String getHandIndicesJson() {
+        return handIndicesJson;
+    }
+
+    public void setHandIndicesJson(String handIndicesJson) {
+        this.handIndicesJson = handIndicesJson;
     }
 
 }

@@ -12,6 +12,7 @@ import ch.uzh.ifi.hase.soprafs26.repository.GameRepository;
 import ch.uzh.ifi.hase.soprafs26.repository.UserRepository;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GameSettingsPutDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.HandCardDTO;
 import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,7 +50,7 @@ public class GameService {
     private final ChatMessageRepository chatMessageRepository;
 
     // helpers for bonus: streak and timer calculation
-    private static final int TURN_LIMIT_SECONDS = 30;
+    private static final int TURN_LIMIT_SECONDS = 9999;
     private static final int BASE_CORRECT_POINTS = 100;
     private static final int TIME_BONUS_PER_SECOND = 2;
     private static final int STREAK_BONUS_PER_STEP = 10;
@@ -194,11 +195,12 @@ public class GameService {
             }
 
             gamePlayer.setCurrentCardIndex(null);
+            gamePlayer.setHandIndicesJson(null);
             gamePlayer.setCorrectPlacements(0);
             gamePlayer.setIncorrectPlacements(0);
             gamePlayer.setCorrectStreak(0);
             gamePlayer.setBestStreak(0);
-            gamePlayer.setCardsInHand(INITIAL_HAND_SIZE);
+            dealCardsToPlayer(gamePlayer, game, INITIAL_HAND_SIZE);
 
             gamePlayerRepository.save(gamePlayer);
         }
@@ -316,14 +318,10 @@ public class GameService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.CONFLICT, "No active player found for this game"));
 
-        if (activePlayer.getCurrentCardIndex() == null) {
+        List<Integer> hand = deserializeHandIndices(activePlayer.getHandIndicesJson());
+        if (!hand.contains(cardIndex)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Active player has not drawn a card yet");
-        }
-
-        if (!activePlayer.getCurrentCardIndex().equals(cardIndex)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Player may only place the card they most recently drew");
+                    "Card index " + cardIndex + " is not in player's hand");
         }
 
         List<EventCard> deck = deserializeDeck(game.getDeckJson());
@@ -381,10 +379,18 @@ public class GameService {
 
             activePlayer.setScore(activePlayer.getScore() + pointsAwarded);
             activePlayer.setCorrectPlacements(activePlayer.getCorrectPlacements() + 1);
-            activePlayer.setCardsInHand(activePlayer.getCardsInHand() - 1);
+            // Remove the placed card from the hand; correct placements do not draw a replacement.
+            hand.remove(Integer.valueOf(cardIndex));
+            activePlayer.setHandIndicesJson(serializeHandIndices(hand));
+            activePlayer.setCardsInHand(hand.size());
         } else {
             activePlayer.setIncorrectPlacements(activePlayer.getIncorrectPlacements() + 1);
             activePlayer.setCorrectStreak(0);
+            // Discard card and deal replacement — net: 0 change
+            hand.remove(Integer.valueOf(cardIndex));
+            activePlayer.setHandIndicesJson(serializeHandIndices(hand));
+            activePlayer.setCardsInHand(hand.size());
+            dealCardsToPlayer(activePlayer, game, 1);
         }
 
         activePlayer.setCurrentCardIndex(null);
@@ -432,6 +438,8 @@ public class GameService {
             dto.setActiveTurn(gamePlayer.getActiveTurn());
             dto.setCorrectStreak(gamePlayer.getCorrectStreak());
             dto.setBestStreak(gamePlayer.getBestStreak());
+            dto.setCardsInHand(gamePlayer.getCardsInHand());
+            dto.setCurrentCardIndex(gamePlayer.getCurrentCardIndex());
             scores.add(dto);
         }
 
@@ -574,6 +582,69 @@ public class GameService {
                 .replace("\\n", "\n")
                 .replace("\\r", "\r")
                 .replace("\\t", "\t");
+    }
+
+    private String serializeHandIndices(List<Integer> indices) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < indices.size(); i++) {
+            if (i > 0) sb.append(",");
+            sb.append(indices.get(i));
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    private List<Integer> deserializeHandIndices(String json) {
+        List<Integer> indices = new ArrayList<>();
+        if (json == null || json.isEmpty() || "[]".equals(json)) return indices;
+        String inner = json.trim();
+        if (inner.startsWith("[")) inner = inner.substring(1);
+        if (inner.endsWith("]")) inner = inner.substring(0, inner.length() - 1);
+        for (String part : inner.split(",")) {
+            part = part.trim();
+            if (!part.isEmpty()) {
+                try { indices.add(Integer.parseInt(part)); } catch (NumberFormatException ignored) {}
+            }
+        }
+        return indices;
+    }
+
+    private void dealCardsToPlayer(GamePlayer player, Game game, int count) {
+        List<Integer> hand = deserializeHandIndices(player.getHandIndicesJson());
+        int nextIndex = game.getNextCardIndex();
+        int deckSize = game.getDeckSize();
+        for (int i = 0; i < count && nextIndex < deckSize; i++) {
+            hand.add(nextIndex++);
+        }
+        game.setNextCardIndex(nextIndex);
+        player.setHandIndicesJson(serializeHandIndices(hand));
+        player.setCardsInHand(hand.size());
+    }
+
+    public List<HandCardDTO> getHand(Long gameId, Long userId) {
+        Game game = findGameOrThrow(gameId);
+        assertInProgress(game);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        GamePlayer player = gamePlayerRepository.findByGameAndUser(game, user)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Player not in game"));
+
+        List<Integer> handIndices = deserializeHandIndices(player.getHandIndicesJson());
+        List<EventCard> deck = deserializeDeck(game.getDeckJson());
+        List<HandCardDTO> result = new ArrayList<>();
+
+        for (int idx : handIndices) {
+            if (idx < 0 || idx >= deck.size()) continue;
+            EventCard card = deck.get(idx);
+            HandCardDTO dto = new HandCardDTO();
+            dto.setDeckIndex(idx);
+            dto.setTitle(card.getTitle());
+            dto.setImageUrl(card.getImageUrl());
+            result.add(dto);
+        }
+        return result;
     }
 
     private void advanceTurn(Game game, GamePlayer currentPlayer) {
@@ -810,7 +881,6 @@ public class GameService {
             dto.setIncorrectPlacements(incorrectPlacements);
             dto.setWinner(winner);
             dto.setBestStreak(gamePlayer.getBestStreak());
-
             finalResults.add(dto);
         }
 

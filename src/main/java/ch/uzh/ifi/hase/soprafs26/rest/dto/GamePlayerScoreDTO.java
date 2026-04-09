@@ -9,6 +9,8 @@ public class GamePlayerScoreDTO {
     private Boolean activeTurn;
     private Integer correctStreak;
     private Integer bestStreak;
+    private Integer cardsInHand;
+    private Integer currentCardIndex;
 
     public Long getUserId() {
         return userId;
@@ -64,5 +66,21 @@ public class GamePlayerScoreDTO {
 
     public void setBestStreak(Integer bestStreak) {
         this.bestStreak = bestStreak;
+    }
+
+    public Integer getCardsInHand() {
+        return cardsInHand;
+    }
+
+    public void setCardsInHand(Integer cardsInHand) {
+        this.cardsInHand = cardsInHand;
+    }
+
+    public Integer getCurrentCardIndex() {
+        return currentCardIndex;
+    }
+
+    public void setCurrentCardIndex(Integer currentCardIndex) {
+        this.currentCardIndex = currentCardIndex;
     }
 }

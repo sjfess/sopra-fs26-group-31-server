@@ -216,6 +216,8 @@ public class GameServiceTest {
         gp1.setActiveTurn(true);
         gp1.setCurrentCardIndex(0);
         gp1.setCardsInHand(5);
+        gp1.setHandIndicesJson("[0,1,2,3,4]");
+        gp1.setTurnStartedAt(Instant.now().minusSeconds(9969));
 
         GamePlayer gp2 = new GamePlayer();
         gp2.setId(101L);
@@ -278,6 +280,7 @@ public class GameServiceTest {
         gp1.setCorrectStreak(3);
         gp1.setBestStreak(3);
         gp1.setCardsInHand(5);
+        gp1.setHandIndicesJson("[0,1,2,3,4]");
 
         GamePlayer gp2 = new GamePlayer();
         gp2.setId(101L);
@@ -287,6 +290,9 @@ public class GameServiceTest {
         gp2.setScore(0);
         gp2.setActiveTurn(false);
         gp2.setCardsInHand(5);
+
+        game.setDeckSize(6);
+        game.setNextCardIndex(5);
 
         when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
         when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(gp1));
@@ -599,6 +605,7 @@ public class GameServiceTest {
         gp1.setActiveTurn(true);
         gp1.setCurrentCardIndex(0);
         gp1.setCardsInHand(5);
+        gp1.setHandIndicesJson("[0,1,2,3,4]");
 
         GamePlayer gp2 = new GamePlayer();
         gp2.setId(101L);
@@ -802,6 +809,8 @@ public class GameServiceTest {
         gp1.setCorrectStreak(1);
         gp1.setBestStreak(1);
         gp1.setCardsInHand(4);
+        gp1.setHandIndicesJson("[0,1,2,3]");
+        gp1.setTurnStartedAt(Instant.now().minusSeconds(9969));
 
         GamePlayer gp2 = new GamePlayer();
         gp2.setId(101L);
