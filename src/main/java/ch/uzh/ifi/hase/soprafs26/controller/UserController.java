@@ -96,4 +96,5 @@ public class UserController {
                 .map(DTOMapper.INSTANCE::convertEntityToFriendRequestGetDTO)
                 .toList();
     }
+
 }

@@ -19,6 +19,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.ChatMessageDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.ChatMessageGetDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.GameInvitePostDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.GameInviteGetDTO;
+
+
 
 
 import java.util.ArrayList;
@@ -200,5 +204,24 @@ public class GameController {
         List<EventCard> timeline = gameService.getTimeline(game.getId());
         dto.setTimelineSize(timeline.size());
         return dto;
+    }
+
+    @PostMapping("/games/{gameId}/invite")
+    @ResponseStatus(HttpStatus.CREATED)
+    public void invitePlayer(@PathVariable Long gameId,
+                             @RequestBody GameInvitePostDTO dto) {
+        gameService.invitePlayer(gameId, dto.getFromUserId(), dto.getToUsername());
+    }
+
+    @GetMapping("/games/invites/{userId}")
+    @ResponseStatus(HttpStatus.OK)
+    public List<GameInviteGetDTO> getInvites(@PathVariable Long userId) {
+        return gameService.getInvitesForUser(userId);
+    }
+
+    @DeleteMapping("/games/invites/{inviteId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteInvite(@PathVariable Long inviteId) {
+        gameService.deleteInvite(inviteId);
     }
 }
