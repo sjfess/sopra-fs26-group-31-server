@@ -913,7 +913,7 @@ public class GameService {
 
         return finishedPlayers >= requiredFinishedPlayers;
     }
-}
+
 
     public GameInvite invitePlayer(Long gameId, Long fromUserId, String toUsername){
         Game game = findGameOrThrow(gameId);
@@ -968,7 +968,5 @@ public class GameService {
     public void deleteInvite(Long inviteId) {
         gameInviteRepository.deleteById(inviteId);
     }
-
-
 
 }
