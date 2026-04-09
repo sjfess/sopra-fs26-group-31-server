@@ -11,6 +11,7 @@ import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GameSettingsPutDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.JoinGameDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.PlaceMoveDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.HandCardDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.PlacementResultDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.mapper.DTOMapper;
 import ch.uzh.ifi.hase.soprafs26.service.GameService;
@@ -85,7 +86,7 @@ public class GameController {
     @ResponseBody
     public GameGetDTO startGame(
             @PathVariable Long gameId,
-            @RequestParam(value = "deckSize", defaultValue = "40") int deckSize) {
+            @RequestParam(value = "deckSize", defaultValue = "80") int deckSize) {
         Game game = gameService.startGame(gameId, deckSize);
         return toGameGetDTO(game);
     }
@@ -181,6 +182,13 @@ public class GameController {
     @ResponseBody
     public List<GamePlayerScoreDTO> getLiveScores(@PathVariable Long gameId) {
         return gameService.getLiveScores(gameId);
+    }
+
+    @GetMapping("/games/{gameId}/hand")
+    @ResponseStatus(HttpStatus.OK)
+    @ResponseBody
+    public List<HandCardDTO> getHand(@PathVariable Long gameId, @RequestParam Long userId) {
+        return gameService.getHand(gameId, userId);
     }
 
     @PostMapping("/games/{gameId}/finalize")
