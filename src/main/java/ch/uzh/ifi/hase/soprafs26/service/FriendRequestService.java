@@ -47,17 +47,17 @@ public class FriendRequestService {
         }
 
         FriendRequest existingDirectRequest =
-                friendRequestRepository.findBySenderAndReceiver(sender, receiver);
-        if (existingDirectRequest != null &&
-                existingDirectRequest.getStatus() == FriendRequestStatus.PENDING) {
+                friendRequestRepository.findBySenderAndReceiverAndStatus(
+                        sender, receiver, FriendRequestStatus.PENDING);
+        if (existingDirectRequest != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "A pending friend request already exists.");
         }
 
         FriendRequest existingReverseRequest =
-                friendRequestRepository.findBySenderAndReceiver(receiver, sender);
-        if (existingReverseRequest != null &&
-                existingReverseRequest.getStatus() == FriendRequestStatus.PENDING) {
+                friendRequestRepository.findBySenderAndReceiverAndStatus(
+                        receiver, sender, FriendRequestStatus.PENDING);
+        if (existingReverseRequest != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "This user has already sent you a friend request.");
         }

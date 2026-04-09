@@ -6,10 +6,12 @@ import ch.uzh.ifi.hase.soprafs26.entity.Game;
 import ch.uzh.ifi.hase.soprafs26.entity.GamePlayer;
 import ch.uzh.ifi.hase.soprafs26.entity.User;
 import ch.uzh.ifi.hase.soprafs26.entity.ChatMessage;
+import ch.uzh.ifi.hase.soprafs26.entity.GameInvite;
 import ch.uzh.ifi.hase.soprafs26.repository.GamePlayerRepository;
 import ch.uzh.ifi.hase.soprafs26.repository.ChatMessageRepository;
 import ch.uzh.ifi.hase.soprafs26.repository.GameRepository;
 import ch.uzh.ifi.hase.soprafs26.repository.UserRepository;
+import ch.uzh.ifi.hase.soprafs26.repository.GameInviteRepository;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GameSettingsPutDTO;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,15 +24,14 @@ import org.springframework.web.server.ResponseStatusException;
 import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
 import ch.uzh.ifi.hase.soprafs26.constant.GameMode;
 import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
-import ch.uzh.ifi.hase.soprafs26.rest.dto.ChatMessageDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.ChatMessageGetDTO;
-
+import ch.uzh.ifi.hase.soprafs26.rest.dto.GameInviteGetDTO;
 
 
 import java.time.Duration;
 import java.time.Instant;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
-import java.util.Comparator;
+
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,6 +48,7 @@ public class GameService {
     private final WikidataService wikidataService;
     private final Random random = new Random();
     private final ChatMessageRepository chatMessageRepository;
+    private final GameInviteRepository gameInviteRepository;
 
     // helpers for bonus: streak and timer calculation
     private static final int TURN_LIMIT_SECONDS = 30;
@@ -60,13 +62,15 @@ public class GameService {
             GamePlayerRepository gamePlayerRepository,
             UserRepository userRepository,
             WikidataService wikidataService,
-            ChatMessageRepository chatMessageRepository
+            ChatMessageRepository chatMessageRepository,
+            GameInviteRepository gameInviteRepository
     ) {
         this.gameRepository = gameRepository;
         this.gamePlayerRepository = gamePlayerRepository;
         this.userRepository = userRepository;
         this.wikidataService = wikidataService;
         this.chatMessageRepository = chatMessageRepository;
+        this.gameInviteRepository = gameInviteRepository;
     }
 
     /**
@@ -555,7 +559,7 @@ public class GameService {
                 break;
             }
         }
-        return num.length() > 0 ? num.toString() : null;
+        return !num.isEmpty() ? num.toString() : null;
     }
 
     private String escapeJson(String s) {
@@ -839,4 +843,61 @@ public class GameService {
 
         return finishedPlayers >= requiredFinishedPlayers;
     }
+
+    public GameInvite invitePlayer(Long gameId, Long fromUserId, String toUsername){
+        Game game = findGameOrThrow(gameId);
+
+        User fromUser = userRepository.findById(fromUserId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User with id " + fromUserId + " not found"));
+
+        User toUser = userRepository.findByUsername(toUsername);
+        if (toUser == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, "User " + toUsername + " not found");
+        }
+        if (fromUser.getUsername().equalsIgnoreCase(toUser.getUsername())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "You cannot invite yourself");
+        }
+
+        if (gameInviteRepository.existsByGameIdAndToUserId(gameId, toUser.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "User already has an invite for this game");
+        }
+        GameInvite gameInvite = new GameInvite();
+        gameInvite.setGameId(gameId);
+        gameInvite.setLobbyCode(game.getLobbyCode());
+        gameInvite.setFromUserId(fromUser.getId());
+        gameInvite.setFromUsername(fromUser.getUsername());
+        gameInvite.setToUserId(toUser.getId());
+
+        gameInviteRepository.save(gameInvite);
+
+        return gameInvite;
+    }
+
+    public List<GameInviteGetDTO> getInvitesForUser(Long userId) {
+        List<GameInvite> invites = gameInviteRepository.findAllByToUserId(userId);
+        List<GameInviteGetDTO> inviteDTOs = new ArrayList<>();
+
+        for (GameInvite invite : invites) {
+            GameInviteGetDTO dto = new GameInviteGetDTO();
+            dto.setId(invite.getId());
+            dto.setGameId(invite.getGameId());
+            dto.setLobbyCode(invite.getLobbyCode());
+            dto.setFromUsername(invite.getFromUsername());
+
+            inviteDTOs.add(dto);
+        }
+
+        return inviteDTOs;
+    }
+
+    public void deleteInvite(Long inviteId) {
+        gameInviteRepository.deleteById(inviteId);
+    }
+
+
+
 }
