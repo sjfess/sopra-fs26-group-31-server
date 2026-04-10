@@ -234,11 +234,6 @@ public class GameService {
                     "It is not this player's turn");
         }
 
-        if (player.getCurrentCardIndex() != null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Active player already selected a card that must be placed first");
-        }
-
         List<Integer> hand = deserializeHandIndices(player.getHandIndicesJson());
 
         if (!hand.contains(deckIndex)) {
@@ -259,7 +254,6 @@ public class GameService {
 
         return deck.get(deckIndex);
     }
-
     /**
      * Returns a specific card from the deck by deck index.
      */
