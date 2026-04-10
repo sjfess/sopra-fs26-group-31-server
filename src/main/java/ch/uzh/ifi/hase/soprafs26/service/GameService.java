@@ -52,7 +52,7 @@ public class GameService {
     private final GameInviteRepository gameInviteRepository;
 
     // helpers for bonus: streak and timer calculation
-    private static final int TURN_LIMIT_SECONDS = 9999;
+    private static final int TURN_LIMIT_SECONDS = 30;
     private static final int BASE_CORRECT_POINTS = 100;
     private static final int TIME_BONUS_PER_SECOND = 2;
     private static final int STREAK_BONUS_PER_STEP = 10;
@@ -217,41 +217,47 @@ public class GameService {
     /**
      * Draws the next card for the active player.
      */
-    public EventCard drawCard(Long gameId) {
+    public EventCard drawCard(Long gameId, Long userId, int deckIndex) {
         Game game = findGameOrThrow(gameId);
         assertInProgress(game);
 
-        GamePlayer activePlayer = gamePlayerRepository.findByGameAndActiveTurnTrue(game)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.CONFLICT, "No active player found for this game"));
+                        HttpStatus.NOT_FOUND, "User with id " + userId + " was not found"));
 
-        if (activePlayer.getCurrentCardIndex() != null) {
+        GamePlayer player = gamePlayerRepository.findByGameAndUser(game, user)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "User is not part of this game"));
+
+        if (!Boolean.TRUE.equals(player.getActiveTurn())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Active player already has a drawn card that must be placed first");
+                    "It is not this player's turn");
+        }
+
+        if (player.getCurrentCardIndex() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Active player already selected a card that must be placed first");
+        }
+
+        List<Integer> hand = deserializeHandIndices(player.getHandIndicesJson());
+
+        if (!hand.contains(deckIndex)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Selected card is not in player's hand");
         }
 
         List<EventCard> deck = deserializeDeck(game.getDeckJson());
-        int index = game.getNextCardIndex();
 
-        if (index >= deck.size()) {
-            if (isTimelineGameFinished(game)) {
-                finalizeGame(game.getId());
-                throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Game finished because no cards are left in the deck");
-            }
-
-            throw new ResponseStatusException(HttpStatus.GONE,
-                    "No cards left in the deck");
+        if (deckIndex < 0 || deckIndex >= deck.size()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "Card index " + deckIndex + " out of range");
         }
 
-        activePlayer.setCurrentCardIndex(index);
-        activePlayer.setTurnStartedAt(Instant.now()); // reset timer when new card is drawn
-        gamePlayerRepository.save(activePlayer);
+        player.setCurrentCardIndex(deckIndex);
+        player.setTurnStartedAt(Instant.now());
+        gamePlayerRepository.save(player);
 
-        game.setNextCardIndex(index + 1);
-        gameRepository.save(game);
-
-        return deck.get(index);
+        return deck.get(deckIndex);
     }
 
     /**
@@ -286,30 +292,7 @@ public class GameService {
      *  Helper method to determine how many players are done.
      */
 
-    private int getFinishedPlayerCount(Game game) {
-        List<GamePlayer> players = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
 
-        int finishedCount = 0;
-        for (GamePlayer player : players) {
-            if (player.getCardsInHand() != null && player.getCardsInHand() <= 0) {
-                finishedCount++;
-            }
-        }
-        return finishedCount;
-    }
-
-    /**
-     *  Helper method to determine how many players have to be done.
-     */
-    private int getRequiredFinishedPlayers(Game game) {
-        List<GamePlayer> players = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
-        int playerCount = players.size();
-
-        if (playerCount <= 3) {
-            return playerCount;
-        }
-        return 3;
-    }
 
     /**
      * Places the active player's currently drawn card at the chosen timeline position.
@@ -322,6 +305,15 @@ public class GameService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.CONFLICT, "No active player found for this game"));
 
+        if (activePlayer.getCurrentCardIndex() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Active player has not selected a card yet");
+        }
+
+        if (!activePlayer.getCurrentCardIndex().equals(cardIndex)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Player may only place the card they selected most recently");
+        }
         List<Integer> hand = deserializeHandIndices(activePlayer.getHandIndicesJson());
         if (!hand.contains(cardIndex)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -904,14 +896,20 @@ public class GameService {
             return false;
         }
 
+        // Falls keine Karten mehr nachgezogen werden können -> Spiel beenden
         if (game.getNextCardIndex() >= game.getDeckSize()) {
             return true;
         }
 
-        int finishedPlayers = getFinishedPlayerCount(game);
-        int requiredFinishedPlayers = getRequiredFinishedPlayers(game);
+        List<GamePlayer> players = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
 
-        return finishedPlayers >= requiredFinishedPlayers;
+        for (GamePlayer player : players) {
+            if (player.getCardsInHand() != null && player.getCardsInHand() == 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
 

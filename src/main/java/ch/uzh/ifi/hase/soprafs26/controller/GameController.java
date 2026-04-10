@@ -21,7 +21,7 @@ import ch.uzh.ifi.hase.soprafs26.rest.dto.ChatMessageDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.ChatMessageGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GameInvitePostDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GameInviteGetDTO;
-
+import ch.uzh.ifi.hase.soprafs26.rest.dto.DrawCardDTO;
 
 
 
@@ -104,8 +104,16 @@ public class GameController {
     @PostMapping("/games/{gameId}/draw")
     @ResponseStatus(HttpStatus.OK)
     @ResponseBody
-    public EventCardGetDTO drawCard(@PathVariable Long gameId) {
-        EventCard card = gameService.drawCard(gameId);
+    public EventCardGetDTO drawCard(
+            @PathVariable Long gameId,
+            @RequestBody DrawCardDTO drawCardDTO) {
+
+        EventCard card = gameService.drawCard(
+                gameId,
+                drawCardDTO.getUserId(),
+                drawCardDTO.getDeckIndex()
+        );
+
         return DTOMapper.INSTANCE.convertEntityToEventCardGetDTO(card);
     }
 
