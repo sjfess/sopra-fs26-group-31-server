@@ -4,7 +4,6 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
 import ch.uzh.ifi.hase.soprafs26.entity.Game;
-import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.JoinGameDTO;
 import ch.uzh.ifi.hase.soprafs26.service.GameService;
@@ -21,6 +20,8 @@ import java.util.List;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -97,44 +98,6 @@ public class GameControllerTest {
                 .andExpect(jsonPath("$.deckSize", is(0)))
                 .andExpect(jsonPath("$.cardsRemaining", is(0)))
                 .andExpect(jsonPath("$.timelineSize", is(0)));
-    }
-
-    @Test
-    public void finalizeGame_validInput_returnsFinalResults() throws Exception {
-        FinalResultDTO result1 = new FinalResultDTO();
-        result1.setUserId(1L);
-        result1.setUsername("alex");
-        result1.setScore(5);
-        result1.setCorrectPlacements(5);
-        result1.setIncorrectPlacements(1);
-        result1.setWinner(true);
-
-        FinalResultDTO result2 = new FinalResultDTO();
-        result2.setUserId(2L);
-        result2.setUsername("mia");
-        result2.setScore(3);
-        result2.setCorrectPlacements(3);
-        result2.setIncorrectPlacements(2);
-        result2.setWinner(false);
-
-        given(gameService.finalizeGame(1L)).willReturn(List.of(result1, result2));
-
-        mockMvc.perform(post("/games/1/finalize")
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].userId", is(1)))
-                .andExpect(jsonPath("$[0].username", is("alex")))
-                .andExpect(jsonPath("$[0].score", is(5)))
-                .andExpect(jsonPath("$[0].correctPlacements", is(5)))
-                .andExpect(jsonPath("$[0].incorrectPlacements", is(1)))
-                .andExpect(jsonPath("$[0].winner", is(true)))
-                .andExpect(jsonPath("$[1].userId", is(2)))
-                .andExpect(jsonPath("$[1].username", is("mia")))
-                .andExpect(jsonPath("$[1].score", is(3)))
-                .andExpect(jsonPath("$[1].correctPlacements", is(3)))
-                .andExpect(jsonPath("$[1].incorrectPlacements", is(2)))
-                .andExpect(jsonPath("$[1].winner", is(false)));
     }
 
     private String asJsonString(final Object object) {

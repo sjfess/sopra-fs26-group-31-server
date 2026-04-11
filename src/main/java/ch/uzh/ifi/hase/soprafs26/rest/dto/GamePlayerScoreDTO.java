@@ -7,8 +7,6 @@ public class GamePlayerScoreDTO {
     private Integer score;
     private Integer turnOrder;
     private Boolean activeTurn;
-    private Integer correctStreak;
-    private Integer bestStreak;
 
     public Long getUserId() {
         return userId;
@@ -48,21 +46,5 @@ public class GamePlayerScoreDTO {
 
     public void setActiveTurn(Boolean activeTurn) {
         this.activeTurn = activeTurn;
-    }
-
-    public Integer getCorrectStreak() {
-        return correctStreak;
-    }
-
-    public void setCorrectStreak(Integer correctStreak) {
-        this.correctStreak = correctStreak;
-    }
-
-    public Integer getBestStreak() {
-        return bestStreak;
-    }
-
-    public void setBestStreak(Integer bestStreak) {
-        this.bestStreak = bestStreak;
     }
 }

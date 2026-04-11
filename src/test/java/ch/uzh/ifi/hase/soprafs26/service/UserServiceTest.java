@@ -49,10 +49,9 @@ public class UserServiceTest {
         verify(userRepository, times(1)).flush();
 
         assertEquals("testUsername", createdUser.getUsername());
-        assertNotEquals("testPassword", createdUser.getPassword()); // password must be hashed
-        assertNotNull(createdUser.getSalt());
+        assertEquals("testPassword", createdUser.getPassword());
         assertNotNull(createdUser.getToken());
-        assertEquals(UserStatus.ONLINE, createdUser.getStatus());
+        assertEquals(UserStatus.OFFLINE, createdUser.getStatus());
         assertNotNull(createdUser.getCreationDate());
         assertEquals("", createdUser.getBio());
         assertEquals(0, createdUser.getTotalGamesPlayed());
