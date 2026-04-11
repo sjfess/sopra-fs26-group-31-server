@@ -1,13 +1,13 @@
 package ch.uzh.ifi.hase.soprafs26.rest.dto;
 
-public class GamePlayerScoreDTO {
+public class FinalResultDTO {
 
     private Long userId;
     private String username;
     private Integer score;
-    private Integer turnOrder;
-    private Boolean activeTurn;
-    private Integer correctStreak;
+    private Integer correctPlacements;
+    private Integer incorrectPlacements;
+    private Boolean winner;
     private Integer bestStreak;
 
     public Long getUserId() {
@@ -34,28 +34,28 @@ public class GamePlayerScoreDTO {
         this.score = score;
     }
 
-    public Integer getTurnOrder() {
-        return turnOrder;
+    public Integer getCorrectPlacements() {
+        return correctPlacements;
     }
 
-    public void setTurnOrder(Integer turnOrder) {
-        this.turnOrder = turnOrder;
+    public void setCorrectPlacements(Integer correctPlacements) {
+        this.correctPlacements = correctPlacements;
     }
 
-    public Boolean getActiveTurn() {
-        return activeTurn;
+    public Integer getIncorrectPlacements() {
+        return incorrectPlacements;
     }
 
-    public void setActiveTurn(Boolean activeTurn) {
-        this.activeTurn = activeTurn;
+    public void setIncorrectPlacements(Integer incorrectPlacements) {
+        this.incorrectPlacements = incorrectPlacements;
     }
 
-    public Integer getCorrectStreak() {
-        return correctStreak;
+    public Boolean getWinner() {
+        return winner;
     }
 
-    public void setCorrectStreak(Integer correctStreak) {
-        this.correctStreak = correctStreak;
+    public void setWinner(Boolean winner) {
+        this.winner = winner;
     }
 
     public Integer getBestStreak() {
