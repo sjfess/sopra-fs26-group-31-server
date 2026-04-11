@@ -1,16 +1,13 @@
 package ch.uzh.ifi.hase.soprafs26.controller;
 
+import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
 import ch.uzh.ifi.hase.soprafs26.entity.EventCard;
 import ch.uzh.ifi.hase.soprafs26.entity.Game;
-import ch.uzh.ifi.hase.soprafs26.rest.dto.CreateGameDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.EventCardGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.EventCardRevealDTO;
-import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GameGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
-import ch.uzh.ifi.hase.soprafs26.rest.dto.GameSettingsPutDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.JoinGameDTO;
-import ch.uzh.ifi.hase.soprafs26.rest.dto.PlaceMoveDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.PlacementResultDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.mapper.DTOMapper;
 import ch.uzh.ifi.hase.soprafs26.service.GameService;
@@ -19,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 public class GameController {
@@ -32,12 +30,8 @@ public class GameController {
     @PostMapping("/games")
     @ResponseStatus(HttpStatus.CREATED)
     @ResponseBody
-    public GameGetDTO createGame(@RequestBody CreateGameDTO createGameDTO) {
-        Game game = gameService.createGame(
-                createGameDTO.getEra(),
-                createGameDTO.getDifficulty(),
-                createGameDTO.getUserId()
-        );
+    public GameGetDTO createGame(@RequestParam("era") HistoricalEra era) {
+        Game game = gameService.createGame(era);
         return toGameGetDTO(game);
     }
 
@@ -66,16 +60,6 @@ public class GameController {
             @PathVariable Long gameId,
             @RequestParam(value = "deckSize", defaultValue = "40") int deckSize) {
         Game game = gameService.startGame(gameId, deckSize);
-        return toGameGetDTO(game);
-    }
-
-    @PutMapping("/games/{gameId}/settings")
-    @ResponseStatus(HttpStatus.OK)
-    @ResponseBody
-    public GameGetDTO putSettings(
-            @PathVariable Long gameId,
-            @RequestBody GameSettingsPutDTO gameSettingsPutDTO) {
-        Game game = gameService.updateSettings(gameId, gameSettingsPutDTO);
         return toGameGetDTO(game);
     }
 
@@ -117,19 +101,15 @@ public class GameController {
         return dtos;
     }
 
-    @PostMapping("/games/{gameId}/moves")
+    @PostMapping("/games/{gameId}/place")
     @ResponseStatus(HttpStatus.OK)
     @ResponseBody
-    public PlacementResultDTO placeMove(
+    public PlacementResultDTO placeCard(
             @PathVariable Long gameId,
-            @RequestBody PlaceMoveDTO placeMoveDTO) {
+            @RequestParam("cardIndex") int cardIndex,
+            @RequestParam("position") int position) {
 
-        Object[] result = gameService.placeCard(
-                gameId,
-                placeMoveDTO.getCardIndex(),
-                placeMoveDTO.getPosition()
-        );
-
+        Object[] result = gameService.placeCard(gameId, cardIndex, position);
         EventCard card = (EventCard) result[0];
         boolean correct = (boolean) result[1];
         int timelineSize = (int) result[2];
@@ -162,16 +142,14 @@ public class GameController {
         return gameService.getLiveScores(gameId);
     }
 
-    @PostMapping("/games/{gameId}/finalize")
-    @ResponseStatus(HttpStatus.OK)
-    @ResponseBody
-    public List<FinalResultDTO> finalizeGame(@PathVariable Long gameId) {
-        return gameService.finalizeGame(gameId);
-    }
-
     private GameGetDTO toGameGetDTO(Game game) {
         GameGetDTO dto = DTOMapper.INSTANCE.convertEntityToGameGetDTO(game);
         dto.setCardsRemaining(game.getDeckSize() - game.getNextCardIndex());
+        dto.setPlayerIds(
+                game.getGamePlayers().stream()
+                        .map(gamePlayer -> gamePlayer.getUser().getId())
+                        .collect(Collectors.toList())
+        );
         List<EventCard> timeline = gameService.getTimeline(game.getId());
         dto.setTimelineSize(timeline.size());
         return dto;

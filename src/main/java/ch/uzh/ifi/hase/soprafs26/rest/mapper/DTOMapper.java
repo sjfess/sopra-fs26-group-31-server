@@ -19,9 +19,6 @@ import ch.uzh.ifi.hase.soprafs26.rest.dto.GameGetDTO;
 import ch.uzh.ifi.hase.soprafs26.entity.FriendRequest;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.FriendRequestGetDTO;
 
-import ch.uzh.ifi.hase.soprafs26.rest.dto.PlayerSummaryDTO;
-import ch.uzh.ifi.hase.soprafs26.entity.GamePlayer;
-
 /**
  * DTOMapper
  * This class is responsible for generating classes that will automatically
@@ -74,18 +71,13 @@ public interface DTOMapper {
 
     // Game
     @Mapping(source = "id", target = "id")
-    @Mapping(source = "difficulty", target = "difficulty")
     @Mapping(source = "lobbyCode", target = "lobbyCode")
     @Mapping(source = "era", target = "era")
     @Mapping(source = "status", target = "status")
     @Mapping(source = "deckSize", target = "deckSize")
     @Mapping(source = "hostId", target = "hostId")
     @Mapping(target = "cardsRemaining", ignore = true)
-    @Mapping(source = "gamePlayers", target = "players")
+    @Mapping(target = "playerIds", ignore = true)
     @Mapping(target = "timelineSize", ignore = true)
     GameGetDTO convertEntityToGameGetDTO(Game game);
-
-    @Mapping(source = "user.id", target = "id")
-    @Mapping(source = "user.username", target = "username")
-    PlayerSummaryDTO convertGamePlayerToPlayerSummaryDTO(GamePlayer gamePlayer);
 }

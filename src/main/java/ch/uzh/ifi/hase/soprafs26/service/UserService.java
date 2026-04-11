@@ -11,8 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import ch.uzh.ifi.hase.soprafs26.util.PasswordUtil;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -35,13 +33,8 @@ public class UserService {
     public User createUser(User newUser) {
         checkIfUsernameExists(newUser.getUsername());
 
-        String salt = PasswordUtil.generateSalt();
-        String hashedPassword = PasswordUtil.hash(newUser.getPassword(), salt);
-        newUser.setSalt(salt);
-        newUser.setPassword(hashedPassword);
-
         newUser.setToken(UUID.randomUUID().toString());
-        newUser.setStatus(UserStatus.ONLINE);
+        newUser.setStatus(UserStatus.OFFLINE);
         newUser.setCreationDate(Instant.now());
 
         if (newUser.getBio() == null) {
