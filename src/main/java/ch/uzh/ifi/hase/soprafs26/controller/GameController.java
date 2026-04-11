@@ -22,7 +22,7 @@ import ch.uzh.ifi.hase.soprafs26.rest.dto.ChatMessageGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GameInvitePostDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GameInviteGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.DrawCardDTO;
-
+import ch.uzh.ifi.hase.soprafs26.rest.dto.RematchRequestDTO;
 
 
 import java.util.ArrayList;
@@ -231,5 +231,16 @@ public class GameController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteInvite(@PathVariable Long inviteId) {
         gameService.deleteInvite(inviteId);
+    }
+
+    @PostMapping("/games/{gameId}/rematch")
+    @ResponseStatus(HttpStatus.CREATED)
+    @ResponseBody
+    public GameGetDTO createRematch(
+            @PathVariable Long gameId,
+            @RequestBody RematchRequestDTO rematchRequestDTO) {
+
+        Game rematch = gameService.createRematch(gameId, rematchRequestDTO.getUserId());
+        return toGameGetDTO(rematch);
     }
 }

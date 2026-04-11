@@ -28,6 +28,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.RematchRequestDTO;
+import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
+import ch.uzh.ifi.hase.soprafs26.constant.GameMode;
 
 @WebMvcTest(GameController.class)
 public class GameControllerTest {
@@ -172,5 +175,40 @@ public class GameControllerTest {
                     String.format("The request body could not be created.%s", e)
             );
         }
+    }
+
+    @Test
+    public void createRematch_validInput_returnsCreatedGame() throws Exception {
+        Game rematch = new Game();
+        rematch.setId(2L);
+        rematch.setLobbyCode("NEW456");
+        rematch.setStatus("WAITING");
+        rematch.setEra(HistoricalEra.MODERN);
+        rematch.setDifficulty(Difficulty.EASY);
+        rematch.setGameMode(GameMode.TIMELINE);
+        rematch.setHostId(10L);
+        rematch.setDeckSize(0);
+        rematch.setNextCardIndex(0);
+        rematch.setTimelineJson("[]");
+
+        RematchRequestDTO dto = new RematchRequestDTO();
+        dto.setUserId(10L);
+
+        given(gameService.createRematch(1L, 10L)).willReturn(rematch);
+        given(gameService.getTimeline(2L)).willReturn(List.of());
+
+        mockMvc.perform(post("/games/1/rematch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(asJsonString(dto)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id", is(2)))
+                .andExpect(jsonPath("$.lobbyCode", is("NEW456")))
+                .andExpect(jsonPath("$.status", is("WAITING")))
+                .andExpect(jsonPath("$.era", is("MODERN")))
+                .andExpect(jsonPath("$.difficulty", is("EASY")))
+                .andExpect(jsonPath("$.gameMode", is("TIMELINE")))
+                .andExpect(jsonPath("$.hostId", is(10)))
+                .andExpect(jsonPath("$.cardsRemaining", is(0)))
+                .andExpect(jsonPath("$.timelineSize", is(0)));
     }
 }

@@ -159,6 +159,69 @@ public class GameService {
         return game;
     }
 
+    @Transactional
+    public Game createRematch(Long finishedGameId, Long requestingUserId) {
+        Game oldGame = findGameOrThrow(finishedGameId);
+
+        if (!"FINISHED".equals(oldGame.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Rematch can only be created from a finished game");
+        }
+
+        List<GamePlayer> oldPlayers = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(oldGame);
+
+        if (oldPlayers.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Finished game has no players");
+        }
+
+        boolean requesterWasPlayer = oldPlayers.stream()
+                .anyMatch(gp -> gp.getUser().getId().equals(requestingUserId));
+
+        if (!requesterWasPlayer) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Only players from the finished game can create a rematch");
+        }
+
+        Game newGame = new Game();
+        newGame.setLobbyCode(generateLobbyCode());
+        newGame.setEra(oldGame.getEra());
+        newGame.setDifficulty(oldGame.getDifficulty());
+        newGame.setGameMode(oldGame.getGameMode());
+        newGame.setHostId(oldGame.getHostId());
+        newGame.setStatus("WAITING");
+        newGame.setDeckJson(null);
+        newGame.setDeckSize(0);
+        newGame.setNextCardIndex(0);
+        newGame.setTimelineJson("[]");
+        newGame.setRematchFromGameId(oldGame.getId());
+
+        newGame = gameRepository.save(newGame);
+
+        for (GamePlayer oldGp : oldPlayers) {
+            GamePlayer newGp = new GamePlayer();
+            newGp.setGame(newGame);
+            newGp.setUser(oldGp.getUser());
+            newGp.setScore(0);
+            newGp.setTurnOrder(oldGp.getTurnOrder());
+            newGp.setActiveTurn(false);
+            newGp.setCurrentCardIndex(null);
+            newGp.setHandIndicesJson(null);
+            newGp.setCardsInHand(0);
+            newGp.setCorrectPlacements(0);
+            newGp.setIncorrectPlacements(0);
+            newGp.setCorrectStreak(0);
+            newGp.setBestStreak(0);
+            newGp.setTurnStartedAt(null);
+
+            gamePlayerRepository.save(newGp);
+        }
+
+        log.info("Created rematch game {} from finished game {}", newGame.getId(), oldGame.getId());
+
+        return newGame;
+    }
+
     /**
      * Starts the game and initializes turn order and scores.
      */

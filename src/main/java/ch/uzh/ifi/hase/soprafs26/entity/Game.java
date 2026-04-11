@@ -31,6 +31,8 @@ public class Game implements Serializable {
     @Column
     private GameMode gameMode;
 
+    @Column
+    private Long rematchFromGameId;
 
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<GamePlayer> gamePlayers = new ArrayList<>();
@@ -122,4 +124,11 @@ public class Game implements Serializable {
     public GameMode getGameMode() { return gameMode; }
     public void setGameMode(GameMode gameMode) { this.gameMode = gameMode; }
 
+    public Long getRematchFromGameId() {
+        return rematchFromGameId;
+    }
+
+    public void setRematchFromGameId(Long rematchFromGameId) {
+        this.rematchFromGameId = rematchFromGameId;
+    }
 }

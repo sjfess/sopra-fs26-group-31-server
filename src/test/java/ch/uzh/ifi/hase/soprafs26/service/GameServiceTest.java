@@ -19,6 +19,8 @@ import org.springframework.http.HttpStatus;
 import ch.uzh.ifi.hase.soprafs26.repository.ChatMessageRepository;
 import ch.uzh.ifi.hase.soprafs26.repository.GameInviteRepository;
 import ch.uzh.ifi.hase.soprafs26.constant.GameMode;
+import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
+import ch.uzh.ifi.hase.soprafs26.constant.GameMode;
 
 import java.time.Instant;
 import java.util.List;
@@ -517,35 +519,41 @@ public class GameServiceTest {
     }
 
     @Test
-    public void drawCard_activePlayerAlreadyHasCard_throwsException() {
+    public void drawCard_selectedAgain_updatesCurrentCardIndex() {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
-        game.setDeckJson("[]");
+
+        EventCard c1 = new EventCard();
+        c1.setTitle("A");
+        c1.setYear(1000);
+
+        EventCard c2 = new EventCard();
+        c2.setTitle("B");
+        c2.setYear(1500);
+
+        game.setDeckJson(gameService.serializeDeck(List.of(c1, c2)));
 
         User user = new User();
         user.setId(10L);
         user.setUsername("alex");
 
-        GamePlayer activePlayer = new GamePlayer();
-        activePlayer.setId(100L);
-        activePlayer.setGame(game);
-        activePlayer.setUser(user);
-        activePlayer.setActiveTurn(true);
-        activePlayer.setCurrentCardIndex(0);
-        activePlayer.setHandIndicesJson("[0]");
-        activePlayer.setCardsInHand(1);
+        GamePlayer player = new GamePlayer();
+        player.setId(100L);
+        player.setGame(game);
+        player.setUser(user);
+        player.setActiveTurn(true);
+        player.setCurrentCardIndex(0);
+        player.setHandIndicesJson("[0,1]");
 
         when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
         when(userRepository.findById(10L)).thenReturn(Optional.of(user));
-        when(gamePlayerRepository.findByGameAndUser(game, user)).thenReturn(Optional.of(activePlayer));
+        when(gamePlayerRepository.findByGameAndUser(game, user)).thenReturn(Optional.of(player));
 
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
-                () -> gameService.drawCard(1L, 10L, 0)
-        );
+        EventCard selected = gameService.drawCard(1L, 10L, 1);
 
-        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("B", selected.getTitle());
+        assertEquals(1, player.getCurrentCardIndex());
     }
 
     @Test
@@ -1092,4 +1100,134 @@ public class GameServiceTest {
         assertFalse(gp1.getActiveTurn());
     }
 
+    @Test
+    public void createRematch_finishedGame_createsNewWaitingGameWithSamePlayersAndSettings() {
+        Game oldGame = new Game();
+        oldGame.setId(1L);
+        oldGame.setStatus("FINISHED");
+        oldGame.setEra(HistoricalEra.MODERN);
+        oldGame.setDifficulty(Difficulty.EASY);
+        oldGame.setGameMode(GameMode.TIMELINE);
+        oldGame.setHostId(10L);
+        oldGame.setLobbyCode("OLD123");
+        oldGame.setDeckSize(80);
+        oldGame.setNextCardIndex(80);
+        oldGame.setTimelineJson("[{}]");
+
+        User user1 = new User();
+        user1.setId(10L);
+        user1.setUsername("alex");
+
+        User user2 = new User();
+        user2.setId(11L);
+        user2.setUsername("mia");
+
+        GamePlayer oldGp1 = new GamePlayer();
+        oldGp1.setId(100L);
+        oldGp1.setGame(oldGame);
+        oldGp1.setUser(user1);
+        oldGp1.setTurnOrder(0);
+        oldGp1.setScore(300);
+        oldGp1.setCardsInHand(0);
+        oldGp1.setCorrectPlacements(5);
+        oldGp1.setIncorrectPlacements(1);
+        oldGp1.setCorrectStreak(2);
+        oldGp1.setBestStreak(4);
+
+        GamePlayer oldGp2 = new GamePlayer();
+        oldGp2.setId(101L);
+        oldGp2.setGame(oldGame);
+        oldGp2.setUser(user2);
+        oldGp2.setTurnOrder(1);
+        oldGp2.setScore(250);
+        oldGp2.setCardsInHand(2);
+        oldGp2.setCorrectPlacements(4);
+        oldGp2.setIncorrectPlacements(2);
+        oldGp2.setCorrectStreak(1);
+        oldGp2.setBestStreak(3);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(oldGame));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(oldGame)).thenReturn(List.of(oldGp1, oldGp2));
+
+        when(gameRepository.save(any(Game.class))).thenAnswer(invocation -> {
+            Game saved = invocation.getArgument(0);
+            if (saved.getId() == null) {
+                saved.setId(2L);
+            }
+            return saved;
+        });
+
+        Game rematch = gameService.createRematch(1L, 10L);
+
+        assertNotNull(rematch);
+        assertEquals(2L, rematch.getId());
+        assertEquals("WAITING", rematch.getStatus());
+        assertEquals(HistoricalEra.MODERN, rematch.getEra());
+        assertEquals(Difficulty.EASY, rematch.getDifficulty());
+        assertEquals(GameMode.TIMELINE, rematch.getGameMode());
+        assertEquals(10L, rematch.getHostId());
+        assertEquals(0, rematch.getDeckSize());
+        assertEquals(0, rematch.getNextCardIndex());
+        assertEquals("[]", rematch.getTimelineJson());
+        assertEquals(1L, rematch.getRematchFromGameId());
+
+        verify(gamePlayerRepository, times(2)).save(argThat(newGp ->
+                newGp.getGame() != null &&
+                        newGp.getGame().getId().equals(2L) &&
+                        newGp.getScore().equals(0) &&
+                        newGp.getActiveTurn().equals(false) &&
+                        newGp.getCurrentCardIndex() == null &&
+                        newGp.getCardsInHand().equals(0) &&
+                        newGp.getCorrectPlacements().equals(0) &&
+                        newGp.getIncorrectPlacements().equals(0) &&
+                        newGp.getCorrectStreak().equals(0) &&
+                        newGp.getBestStreak().equals(0) &&
+                        newGp.getTurnStartedAt() == null
+        ));
+    }
+
+    @Test
+    public void createRematch_gameNotFinished_throwsException() {
+        Game oldGame = new Game();
+        oldGame.setId(1L);
+        oldGame.setStatus("IN_PROGRESS");
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(oldGame));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> gameService.createRematch(1L, 10L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(gamePlayerRepository, never()).save(any(GamePlayer.class));
+    }
+
+    @Test
+    public void createRematch_requestingUserNotInOldGame_throwsException() {
+        Game oldGame = new Game();
+        oldGame.setId(1L);
+        oldGame.setStatus("FINISHED");
+
+        User user1 = new User();
+        user1.setId(10L);
+        user1.setUsername("alex");
+
+        GamePlayer oldGp1 = new GamePlayer();
+        oldGp1.setId(100L);
+        oldGp1.setGame(oldGame);
+        oldGp1.setUser(user1);
+        oldGp1.setTurnOrder(0);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(oldGame));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(oldGame)).thenReturn(List.of(oldGp1));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> gameService.createRematch(1L, 999L)
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        verify(gamePlayerRepository, never()).save(any(GamePlayer.class));
+    }
 }
