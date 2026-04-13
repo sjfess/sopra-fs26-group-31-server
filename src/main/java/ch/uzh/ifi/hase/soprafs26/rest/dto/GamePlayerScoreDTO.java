@@ -11,6 +11,8 @@ public class GamePlayerScoreDTO {
     private Integer bestStreak;
     private Integer cardsInHand;
     private Integer currentCardIndex;
+    private Integer correctPlacements;
+    private Integer incorrectPlacements;
 
     public Long getUserId() {
         return userId;
@@ -83,4 +85,21 @@ public class GamePlayerScoreDTO {
     public void setCurrentCardIndex(Integer currentCardIndex) {
         this.currentCardIndex = currentCardIndex;
     }
+
+    public Integer getCorrectPlacements() {
+        return correctPlacements;
+    }
+
+    public void setCorrectPlacements(Integer correctPlacements) {
+        this.correctPlacements = correctPlacements;
+    }
+
+    public Integer getIncorrectPlacements() {
+        return incorrectPlacements;
+    }
+
+    public void setIncorrectPlacements(Integer incorrectPlacements) {
+        this.incorrectPlacements = incorrectPlacements;
+    }
+
 }
