@@ -48,6 +48,8 @@ public interface DTOMapper {
     @Mapping(source = "totalGamesPlayed", target = "totalGamesPlayed")
     @Mapping(source = "totalWins", target = "totalWins")
     @Mapping(source = "totalPoints", target = "totalPoints")
+    @Mapping(source = "totalCorrectPlacements", target = "totalCorrectPlacements")
+    @Mapping(source = "totalIncorrectPlacements", target = "totalIncorrectPlacements")
     UserGetDTO convertEntityToUserGetDTO(User user);
 
     // FriendRequest
