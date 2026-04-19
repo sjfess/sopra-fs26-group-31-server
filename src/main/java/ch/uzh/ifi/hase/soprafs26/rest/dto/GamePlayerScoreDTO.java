@@ -1,5 +1,7 @@
 package ch.uzh.ifi.hase.soprafs26.rest.dto;
 
+import java.time.Instant;
+
 public class GamePlayerScoreDTO {
 
     private Long userId;
@@ -7,6 +9,7 @@ public class GamePlayerScoreDTO {
     private Integer score;
     private Integer turnOrder;
     private Boolean activeTurn;
+    private Instant turnStartedAt;
     private Integer correctStreak;
     private Integer bestStreak;
     private Integer cardsInHand;
@@ -52,6 +55,14 @@ public class GamePlayerScoreDTO {
 
     public void setActiveTurn(Boolean activeTurn) {
         this.activeTurn = activeTurn;
+    }
+
+    public Instant getTurnStartedAt() {
+        return turnStartedAt;
+    }
+
+    public void setTurnStartedAt(Instant turnStartedAt) {
+        this.turnStartedAt = turnStartedAt;
     }
 
     public Integer getCorrectStreak() {

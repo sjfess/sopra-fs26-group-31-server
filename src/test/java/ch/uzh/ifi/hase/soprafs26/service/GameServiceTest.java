@@ -1547,4 +1547,122 @@ public class GameServiceTest {
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
     }
+
+    // ── Chat ─────────────────────────────────────────────────────────────────
+
+    @Test
+    public void addChatMessage_validInput_returnsDTOWithCorrectFields() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+
+        User user = new User();
+        user.setId(10L);
+        user.setUsername("alex");
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
+        when(chatMessageRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        ch.uzh.ifi.hase.soprafs26.rest.dto.ChatMessageGetDTO result =
+                gameService.addChatMessage(1L, 10L, "Hello!");
+
+        assertEquals(10L, result.getPlayerId());
+        assertEquals("alex", result.getUsername());
+        assertEquals("Hello!", result.getMessage());
+        assertNotNull(result.getTimestamp());
+        verify(chatMessageRepository, times(1)).save(any());
+    }
+
+    @Test
+    public void addChatMessage_gameNotFound_throwsNotFound() {
+        when(gameRepository.findById(99L)).thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> gameService.addChatMessage(99L, 10L, "Hi")
+        );
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+        verify(chatMessageRepository, never()).save(any());
+    }
+
+    @Test
+    public void addChatMessage_userNotFound_throwsNotFound() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(userRepository.findById(99L)).thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> gameService.addChatMessage(1L, 99L, "Hi")
+        );
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+        verify(chatMessageRepository, never()).save(any());
+    }
+
+    @Test
+    public void getChatMessages_returnsMessagesInOrder() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+
+        ch.uzh.ifi.hase.soprafs26.entity.ChatMessage msg1 =
+                new ch.uzh.ifi.hase.soprafs26.entity.ChatMessage();
+        msg1.setPlayerId(10L);
+        msg1.setUsername("alex");
+        msg1.setMessage("First");
+        msg1.setTimestamp("1000");
+
+        ch.uzh.ifi.hase.soprafs26.entity.ChatMessage msg2 =
+                new ch.uzh.ifi.hase.soprafs26.entity.ChatMessage();
+        msg2.setPlayerId(11L);
+        msg2.setUsername("mia");
+        msg2.setMessage("Second");
+        msg2.setTimestamp("2000");
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(chatMessageRepository.findAllByGameIdOrderByTimestampAsc(1L))
+                .thenReturn(List.of(msg1, msg2));
+
+        List<ch.uzh.ifi.hase.soprafs26.rest.dto.ChatMessageGetDTO> result =
+                gameService.getChatMessages(1L);
+
+        assertEquals(2, result.size());
+        assertEquals(10L, result.get(0).getPlayerId());
+        assertEquals("alex", result.get(0).getUsername());
+        assertEquals("First", result.get(0).getMessage());
+        assertEquals("1000", result.get(0).getTimestamp());
+        assertEquals(11L, result.get(1).getPlayerId());
+        assertEquals("mia", result.get(1).getUsername());
+        assertEquals("Second", result.get(1).getMessage());
+    }
+
+    @Test
+    public void getChatMessages_gameNotFound_throwsNotFound() {
+        when(gameRepository.findById(99L)).thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> gameService.getChatMessages(99L)
+        );
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+    }
+
+    @Test
+    public void getChatMessages_noMessages_returnsEmptyList() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(chatMessageRepository.findAllByGameIdOrderByTimestampAsc(1L)).thenReturn(List.of());
+
+        List<ch.uzh.ifi.hase.soprafs26.rest.dto.ChatMessageGetDTO> result =
+                gameService.getChatMessages(1L);
+
+        assertTrue(result.isEmpty());
+    }
 }
