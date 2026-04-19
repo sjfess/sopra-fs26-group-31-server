@@ -493,6 +493,8 @@ public class GameService {
             dto.setBestStreak(gamePlayer.getBestStreak());
             dto.setCardsInHand(gamePlayer.getCardsInHand());
             dto.setCurrentCardIndex(gamePlayer.getCurrentCardIndex());
+            dto.setCorrectPlacements(gamePlayer.getCorrectPlacements());
+            dto.setIncorrectPlacements(gamePlayer.getIncorrectPlacements());
             scores.add(dto);
         }
 
@@ -892,6 +894,10 @@ public class GameService {
     public List<FinalResultDTO> finalizeGame(Long gameId) {
         Game game = findGameOrThrow(gameId);
 
+        if ("FINISHED".equals(game.getStatus())) {
+            return buildFinalResultDTOs(game);
+        }
+
         if (!"IN_PROGRESS".equals(game.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Game is " + game.getStatus() + ", not IN_PROGRESS");
@@ -945,6 +951,28 @@ public class GameService {
         //gameRepository.delete(game);
 
         return finalResults;
+    }
+
+    private List<FinalResultDTO> buildFinalResultDTOs(Game game) {
+        List<GamePlayer> gamePlayers = gamePlayerRepository
+                .findAllByGameOrderByScoreDescTurnOrderAsc(game);
+        int highestScore = gamePlayers.isEmpty() ? 0
+                : (gamePlayers.get(0).getScore() != null ? gamePlayers.get(0).getScore() : 0);
+
+        List<FinalResultDTO> results = new ArrayList<>();
+        for (GamePlayer gp : gamePlayers) {
+            int score = gp.getScore() != null ? gp.getScore() : 0;
+            FinalResultDTO dto = new FinalResultDTO();
+            dto.setUserId(gp.getUser().getId());
+            dto.setUsername(gp.getUser().getUsername());
+            dto.setScore(score);
+            dto.setCorrectPlacements(gp.getCorrectPlacements() != null ? gp.getCorrectPlacements() : 0);
+            dto.setIncorrectPlacements(gp.getIncorrectPlacements() != null ? gp.getIncorrectPlacements() : 0);
+            dto.setWinner(score == highestScore);
+            dto.setBestStreak(gp.getBestStreak());
+            results.add(dto);
+        }
+        return results;
     }
 
 
