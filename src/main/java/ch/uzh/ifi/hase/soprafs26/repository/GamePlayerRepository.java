@@ -27,4 +27,6 @@ public interface GamePlayerRepository extends JpaRepository<GamePlayer, Long> {
     @Modifying
     @Transactional
     void deleteByGameAndUser(Game game, User user);
+
+    List<GamePlayer> findByActiveTurnTrue();
 }

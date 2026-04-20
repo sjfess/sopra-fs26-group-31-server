@@ -3,6 +3,7 @@ package ch.uzh.ifi.hase.soprafs26.service;
 import ch.uzh.ifi.hase.soprafs26.constant.UserStatus;
 import ch.uzh.ifi.hase.soprafs26.entity.User;
 import ch.uzh.ifi.hase.soprafs26.repository.UserRepository;
+import ch.uzh.ifi.hase.soprafs26.util.PasswordUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,10 +43,14 @@ public class UserServiceIntegrationTest {
         User createdUser = userService.createUser(testUser);
 
         assertNotNull(createdUser.getId());
-        assertEquals(testUser.getUsername(), createdUser.getUsername());
-        assertEquals(testUser.getPassword(), createdUser.getPassword());
+        assertEquals("testUsername", createdUser.getUsername());
+
+        assertNotEquals("testPassword", createdUser.getPassword());
+        assertNotNull(createdUser.getSalt());
+        assertTrue(PasswordUtil.matches("testPassword", createdUser.getPassword(), createdUser.getSalt()));
+
         assertNotNull(createdUser.getToken());
-        assertEquals(UserStatus.OFFLINE, createdUser.getStatus());
+        assertEquals(UserStatus.ONLINE, createdUser.getStatus());
         assertNotNull(createdUser.getCreationDate());
         assertEquals("", createdUser.getBio());
         assertEquals(0, createdUser.getTotalGamesPlayed());
@@ -73,7 +78,8 @@ public class UserServiceIntegrationTest {
     public void getUserById_success() {
         User user = new User();
         user.setUsername("user1");
-        user.setPassword("secret");
+        user.setPassword("hashed-secret");
+        user.setSalt("salt");
         user.setToken("token-1");
         user.setStatus(UserStatus.OFFLINE);
         user.setBio("bio");
@@ -96,7 +102,8 @@ public class UserServiceIntegrationTest {
     public void updateUserProfile_success() {
         User user = new User();
         user.setUsername("oldUsername");
-        user.setPassword("secret");
+        user.setPassword("hashed-secret");
+        user.setSalt("salt");
         user.setToken("valid-token");
         user.setStatus(UserStatus.ONLINE);
         user.setBio("old bio");
