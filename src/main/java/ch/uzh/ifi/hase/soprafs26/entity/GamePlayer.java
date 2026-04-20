@@ -3,6 +3,7 @@ package ch.uzh.ifi.hase.soprafs26.entity;
 import jakarta.persistence.*;
 
 import java.io.Serializable;
+import java.time.Instant;
 
 @Entity
 @Table(name = "game_player")
@@ -22,8 +23,14 @@ public class GamePlayer implements Serializable {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @Column(nullable = false)
+    private Integer cardsInHand = 0;
+
     @Column
     private Integer currentCardIndex;
+
+    @Column(columnDefinition = "TEXT")
+    private String handIndicesJson;
 
     @Column(nullable = false)
     private Integer score = 0;
@@ -33,6 +40,20 @@ public class GamePlayer implements Serializable {
 
     @Column(nullable = false)
     private Boolean activeTurn = false;
+
+    @Column
+    private Instant turnStartedAt;
+    @Column(nullable = false)
+    private Integer correctPlacements = 0;
+
+    @Column(nullable = false)
+    private Integer incorrectPlacements = 0;
+
+    @Column(nullable = false)
+    private Integer correctStreak = 0;
+
+    @Column(nullable = false)
+    private Integer bestStreak = 0;
 
     public Long getId() {
         return id;
@@ -89,4 +110,57 @@ public class GamePlayer implements Serializable {
     public void setCurrentCardIndex(Integer currentCardIndex) {
         this.currentCardIndex = currentCardIndex;
     }
+
+    public Instant getTurnStartedAt() { return turnStartedAt; }
+
+    public void setTurnStartedAt(Instant turnStartedAt) { this.turnStartedAt = turnStartedAt; }
+
+    public Integer getCorrectPlacements() {
+        return correctPlacements;
+    }
+
+    public void setCorrectPlacements(Integer correctPlacements) {
+        this.correctPlacements = correctPlacements;
+    }
+
+    public Integer getIncorrectPlacements() {
+        return incorrectPlacements;
+    }
+
+    public void setIncorrectPlacements(Integer incorrectPlacements) {
+        this.incorrectPlacements = incorrectPlacements;
+    }
+
+    public Integer getCorrectStreak() {
+        return correctStreak;
+    }
+
+    public void setCorrectStreak(Integer correctStreak) {
+        this.correctStreak = correctStreak;
+    }
+
+    public Integer getBestStreak() {
+        return bestStreak;
+    }
+
+    public void setBestStreak(Integer bestStreak) {
+        this.bestStreak = bestStreak;
+    }
+
+    public Integer getCardsInHand() {
+        return cardsInHand;
+    }
+
+    public void setCardsInHand(Integer cardsInHand) {
+        this.cardsInHand = cardsInHand;
+    }
+
+    public String getHandIndicesJson() {
+        return handIndicesJson;
+    }
+
+    public void setHandIndicesJson(String handIndicesJson) {
+        this.handIndicesJson = handIndicesJson;
+    }
+
 }

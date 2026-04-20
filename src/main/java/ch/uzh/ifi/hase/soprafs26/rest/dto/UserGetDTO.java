@@ -15,6 +15,8 @@ public class UserGetDTO {
     private Integer totalGamesPlayed;
     private Integer totalWins;
     private Integer totalPoints;
+    private Integer totalCorrectPlacements;
+    private Integer totalIncorrectPlacements;
 
     public Long getId() {
         return id;
@@ -87,4 +89,12 @@ public class UserGetDTO {
     public void setTotalPoints(Integer totalPoints) {
         this.totalPoints = totalPoints;
     }
+
+    public Integer getTotalCorrectPlacements() { return totalCorrectPlacements; }
+
+    public void setTotalCorrectPlacements(Integer totalCorrectPlacements) { this.totalCorrectPlacements = totalCorrectPlacements; }
+
+    public Integer getTotalIncorrectPlacements() { return totalIncorrectPlacements; }
+
+    public void setTotalIncorrectPlacements(Integer totalIncorrectPlacements) { this.totalIncorrectPlacements = totalIncorrectPlacements; }
 }

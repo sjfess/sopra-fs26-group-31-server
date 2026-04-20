@@ -1,6 +1,7 @@
 package ch.uzh.ifi.hase.soprafs26.service;
 
 import ch.uzh.ifi.hase.soprafs26.constant.UserStatus;
+import ch.uzh.ifi.hase.soprafs26.entity.FriendRequest;
 import ch.uzh.ifi.hase.soprafs26.entity.User;
 import ch.uzh.ifi.hase.soprafs26.repository.UserRepository;
 import org.slf4j.Logger;
@@ -11,6 +12,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import ch.uzh.ifi.hase.soprafs26.util.PasswordUtil;
+
+import java.util.ArrayList;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -33,8 +37,13 @@ public class UserService {
     public User createUser(User newUser) {
         checkIfUsernameExists(newUser.getUsername());
 
+        String salt = PasswordUtil.generateSalt();
+        String hashedPassword = PasswordUtil.hash(newUser.getPassword(), salt);
+        newUser.setSalt(salt);
+        newUser.setPassword(hashedPassword);
+
         newUser.setToken(UUID.randomUUID().toString());
-        newUser.setStatus(UserStatus.OFFLINE);
+        newUser.setStatus(UserStatus.ONLINE);
         newUser.setCreationDate(Instant.now());
 
         if (newUser.getBio() == null) {
@@ -106,4 +115,22 @@ public class UserService {
         userRepository.save(userToUpdate);
         userRepository.flush();
     }
+    public List<User> getFriends(Long userId) {
+        User user = getUserById(userId);
+        return new ArrayList<>(user.getFriends());
+    }
+
+    public void removeFriend(Long userId, Long friendId) {
+        User user = getUserById(userId);
+        User friend = getUserById(friendId);
+
+        if (!user.getFriends().contains(friend)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Friendship not found.");
+        }
+        user.getFriends().remove(friend);
+        friend.getFriends().remove(user);
+        userRepository.save(user);
+        userRepository.save(friend);
+    }
+
 }

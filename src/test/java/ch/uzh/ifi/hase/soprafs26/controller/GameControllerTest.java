@@ -3,9 +3,12 @@ package ch.uzh.ifi.hase.soprafs26.controller;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
+import ch.uzh.ifi.hase.soprafs26.entity.EventCard;
 import ch.uzh.ifi.hase.soprafs26.entity.Game;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.JoinGameDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.PlaceMoveDTO;
 import ch.uzh.ifi.hase.soprafs26.service.GameService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,13 +23,14 @@ import java.util.List;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.RematchRequestDTO;
+import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
+import ch.uzh.ifi.hase.soprafs26.constant.GameMode;
 
 @WebMvcTest(GameController.class)
 public class GameControllerTest {
@@ -100,6 +104,73 @@ public class GameControllerTest {
                 .andExpect(jsonPath("$.timelineSize", is(0)));
     }
 
+    @Test
+    public void finalizeGame_validInput_returnsFinalResults() throws Exception {
+        FinalResultDTO result1 = new FinalResultDTO();
+        result1.setUserId(1L);
+        result1.setUsername("alex");
+        result1.setScore(5);
+        result1.setCorrectPlacements(5);
+        result1.setIncorrectPlacements(1);
+        result1.setWinner(true);
+        result1.setBestStreak(4);
+
+
+        FinalResultDTO result2 = new FinalResultDTO();
+        result2.setUserId(2L);
+        result2.setUsername("mia");
+        result2.setScore(3);
+        result2.setCorrectPlacements(3);
+        result2.setIncorrectPlacements(2);
+        result2.setWinner(false);
+        result2.setBestStreak(2);
+
+        given(gameService.finalizeGame(1L)).willReturn(List.of(result1, result2));
+
+        mockMvc.perform(post("/games/1/finalize")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].userId", is(1)))
+                .andExpect(jsonPath("$[0].username", is("alex")))
+                .andExpect(jsonPath("$[0].score", is(5)))
+                .andExpect(jsonPath("$[0].correctPlacements", is(5)))
+                .andExpect(jsonPath("$[0].incorrectPlacements", is(1)))
+                .andExpect(jsonPath("$[0].winner", is(true)))
+                .andExpect(jsonPath("$[0].bestStreak", is(4)))
+                .andExpect(jsonPath("$[1].userId", is(2)))
+                .andExpect(jsonPath("$[1].username", is("mia")))
+                .andExpect(jsonPath("$[1].score", is(3)))
+                .andExpect(jsonPath("$[1].correctPlacements", is(3)))
+                .andExpect(jsonPath("$[1].incorrectPlacements", is(2)))
+                .andExpect(jsonPath("$[1].winner", is(false)))
+                .andExpect(jsonPath("$[1].bestStreak", is(2)));
+    }
+
+    @Test
+    public void placeMove_validInput_returnsPlacementResult() throws Exception {
+        EventCard card = new EventCard();
+        card.setTitle("Moon Landing");
+        card.setYear(1969);
+        card.setImageUrl("https://example.com/moon.jpg");
+
+        PlaceMoveDTO placeMoveDTO = new PlaceMoveDTO();
+        placeMoveDTO.setCardIndex(4);
+        placeMoveDTO.setPosition(1);
+
+        given(gameService.placeCard(1L, 4, 1)).willReturn(new Object[]{card, true, 3});
+
+        mockMvc.perform(post("/games/1/moves")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(asJsonString(placeMoveDTO)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.correct", is(true)))
+                .andExpect(jsonPath("$.title", is("Moon Landing")))
+                .andExpect(jsonPath("$.year", is(1969)))
+                .andExpect(jsonPath("$.imageUrl", is("https://example.com/moon.jpg")))
+                .andExpect(jsonPath("$.timelineSize", is(3)));
+    }
+
     private String asJsonString(final Object object) {
         try {
             return new ObjectMapper().writeValueAsString(object);
@@ -109,5 +180,82 @@ public class GameControllerTest {
                     String.format("The request body could not be created.%s", e)
             );
         }
+    }
+
+    @Test
+    public void createRematch_validInput_returnsCreatedGame() throws Exception {
+        Game rematch = new Game();
+        rematch.setId(2L);
+        rematch.setLobbyCode("NEW456");
+        rematch.setStatus("WAITING");
+        rematch.setEra(HistoricalEra.MODERN);
+        rematch.setDifficulty(Difficulty.EASY);
+        rematch.setGameMode(GameMode.TIMELINE);
+        rematch.setHostId(10L);
+        rematch.setDeckSize(0);
+        rematch.setNextCardIndex(0);
+        rematch.setTimelineJson("[]");
+
+        RematchRequestDTO dto = new RematchRequestDTO();
+        dto.setUserId(10L);
+
+        given(gameService.createRematch(1L, 10L)).willReturn(rematch);
+        given(gameService.getTimeline(2L)).willReturn(List.of());
+
+        mockMvc.perform(post("/games/1/rematch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(asJsonString(dto)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id", is(2)))
+                .andExpect(jsonPath("$.lobbyCode", is("NEW456")))
+                .andExpect(jsonPath("$.status", is("WAITING")))
+                .andExpect(jsonPath("$.era", is("MODERN")))
+                .andExpect(jsonPath("$.difficulty", is("EASY")))
+                .andExpect(jsonPath("$.gameMode", is("TIMELINE")))
+                .andExpect(jsonPath("$.hostId", is(10)))
+                .andExpect(jsonPath("$.cardsRemaining", is(0)))
+                .andExpect(jsonPath("$.timelineSize", is(0)));
+    }
+
+    @Test
+    public void createRematch_missingUserId_returnsBadRequest() throws Exception {
+        mockMvc.perform(post("/games/1/rematch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void createRematch_gameNotFinished_returnsConflict() throws Exception {
+        RematchRequestDTO dto = new RematchRequestDTO();
+        dto.setUserId(10L);
+
+        given(gameService.createRematch(1L, 10L))
+                .willThrow(new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Rematch can only be created from a finished game"
+                ));
+
+        mockMvc.perform(post("/games/1/rematch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(asJsonString(dto)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    public void createRematch_requestingUserNotPlayer_returnsForbidden() throws Exception {
+        RematchRequestDTO dto = new RematchRequestDTO();
+        dto.setUserId(999L);
+
+        given(gameService.createRematch(1L, 999L))
+                .willThrow(new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "Only players from the finished game can create a rematch"
+                ));
+
+        mockMvc.perform(post("/games/1/rematch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(asJsonString(dto)))
+                .andExpect(status().isForbidden());
     }
 }

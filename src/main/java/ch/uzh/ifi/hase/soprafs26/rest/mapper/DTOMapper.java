@@ -19,6 +19,9 @@ import ch.uzh.ifi.hase.soprafs26.rest.dto.GameGetDTO;
 import ch.uzh.ifi.hase.soprafs26.entity.FriendRequest;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.FriendRequestGetDTO;
 
+import ch.uzh.ifi.hase.soprafs26.rest.dto.PlayerSummaryDTO;
+import ch.uzh.ifi.hase.soprafs26.entity.GamePlayer;
+
 /**
  * DTOMapper
  * This class is responsible for generating classes that will automatically
@@ -45,6 +48,8 @@ public interface DTOMapper {
     @Mapping(source = "totalGamesPlayed", target = "totalGamesPlayed")
     @Mapping(source = "totalWins", target = "totalWins")
     @Mapping(source = "totalPoints", target = "totalPoints")
+    @Mapping(source = "totalCorrectPlacements", target = "totalCorrectPlacements")
+    @Mapping(source = "totalIncorrectPlacements", target = "totalIncorrectPlacements")
     UserGetDTO convertEntityToUserGetDTO(User user);
 
     // FriendRequest
@@ -71,13 +76,22 @@ public interface DTOMapper {
 
     // Game
     @Mapping(source = "id", target = "id")
+    @Mapping(source = "difficulty", target = "difficulty")
     @Mapping(source = "lobbyCode", target = "lobbyCode")
     @Mapping(source = "era", target = "era")
     @Mapping(source = "status", target = "status")
     @Mapping(source = "deckSize", target = "deckSize")
     @Mapping(source = "hostId", target = "hostId")
     @Mapping(target = "cardsRemaining", ignore = true)
-    @Mapping(target = "playerIds", ignore = true)
+    @Mapping(source = "gamePlayers", target = "players")
     @Mapping(target = "timelineSize", ignore = true)
+    @Mapping(source = "maxPlayers", target = "maxPlayers")
+    @Mapping(source = "gameMode", target = "gameMode")
     GameGetDTO convertEntityToGameGetDTO(Game game);
+
+    @Mapping(source = "user.id", target = "id")
+    @Mapping(source = "user.username", target = "username")
+    PlayerSummaryDTO convertGamePlayerToPlayerSummaryDTO(GamePlayer gamePlayer);
+
+
 }

@@ -1,5 +1,7 @@
 package ch.uzh.ifi.hase.soprafs26.rest.dto;
 
+import java.time.Instant;
+
 public class GamePlayerScoreDTO {
 
     private Long userId;
@@ -7,6 +9,13 @@ public class GamePlayerScoreDTO {
     private Integer score;
     private Integer turnOrder;
     private Boolean activeTurn;
+    private Instant turnStartedAt;
+    private Integer correctStreak;
+    private Integer bestStreak;
+    private Integer cardsInHand;
+    private Integer currentCardIndex;
+    private Integer correctPlacements;
+    private Integer incorrectPlacements;
 
     public Long getUserId() {
         return userId;
@@ -47,4 +56,61 @@ public class GamePlayerScoreDTO {
     public void setActiveTurn(Boolean activeTurn) {
         this.activeTurn = activeTurn;
     }
+
+    public Instant getTurnStartedAt() {
+        return turnStartedAt;
+    }
+
+    public void setTurnStartedAt(Instant turnStartedAt) {
+        this.turnStartedAt = turnStartedAt;
+    }
+
+    public Integer getCorrectStreak() {
+        return correctStreak;
+    }
+
+    public void setCorrectStreak(Integer correctStreak) {
+        this.correctStreak = correctStreak;
+    }
+
+    public Integer getBestStreak() {
+        return bestStreak;
+    }
+
+    public void setBestStreak(Integer bestStreak) {
+        this.bestStreak = bestStreak;
+    }
+
+    public Integer getCardsInHand() {
+        return cardsInHand;
+    }
+
+    public void setCardsInHand(Integer cardsInHand) {
+        this.cardsInHand = cardsInHand;
+    }
+
+    public Integer getCurrentCardIndex() {
+        return currentCardIndex;
+    }
+
+    public void setCurrentCardIndex(Integer currentCardIndex) {
+        this.currentCardIndex = currentCardIndex;
+    }
+
+    public Integer getCorrectPlacements() {
+        return correctPlacements;
+    }
+
+    public void setCorrectPlacements(Integer correctPlacements) {
+        this.correctPlacements = correctPlacements;
+    }
+
+    public Integer getIncorrectPlacements() {
+        return incorrectPlacements;
+    }
+
+    public void setIncorrectPlacements(Integer incorrectPlacements) {
+        this.incorrectPlacements = incorrectPlacements;
+    }
+
 }
