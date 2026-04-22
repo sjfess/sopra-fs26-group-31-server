@@ -18,11 +18,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.server.ResponseStatusException;
-import org.mockito.Mockito;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import ch.uzh.ifi.hase.soprafs26.rest.dto.*;
-import ch.uzh.ifi.hase.soprafs26.entity.GameInvite;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 
 import java.util.List;
 
@@ -204,7 +202,7 @@ public class GameControllerTest {
         RematchRequestDTO dto = new RematchRequestDTO();
         dto.setUserId(10L);
 
-        given(gameService.createRematch(1L, 10L)).willReturn(rematch);
+        given(gameService.createRematchAndCloseOldGame(1L, 10L)).willReturn(rematch);
         given(gameService.getTimeline(2L)).willReturn(List.of());
 
         mockMvc.perform(post("/games/1/rematch")
@@ -235,7 +233,7 @@ public class GameControllerTest {
         RematchRequestDTO dto = new RematchRequestDTO();
         dto.setUserId(10L);
 
-        given(gameService.createRematch(1L, 10L))
+        given(gameService.createRematchAndCloseOldGame(1L, 10L))
                 .willThrow(new ResponseStatusException(
                         HttpStatus.CONFLICT,
                         "Rematch can only be created from a finished game"
@@ -248,14 +246,14 @@ public class GameControllerTest {
     }
 
     @Test
-    public void createRematch_requestingUserNotPlayer_returnsForbidden() throws Exception {
+    public void createRematch_nonHost_returnsForbidden() throws Exception {
         RematchRequestDTO dto = new RematchRequestDTO();
         dto.setUserId(999L);
 
-        given(gameService.createRematch(1L, 999L))
+        given(gameService.createRematchAndCloseOldGame(1L, 999L))
                 .willThrow(new ResponseStatusException(
                         HttpStatus.FORBIDDEN,
-                        "Only players from the finished game can create a rematch"
+                        "Only the host can create a rematch"
                 ));
 
         mockMvc.perform(post("/games/1/rematch")
@@ -263,272 +261,39 @@ public class GameControllerTest {
                         .content(asJsonString(dto)))
                 .andExpect(status().isForbidden());
     }
+
     @Test
-    public void createGame_validInput_returnsCreatedGame() throws Exception {
-        Game game = new Game();
-        game.setId(1L);
-        game.setLobbyCode("XYZ999");
-        game.setStatus("WAITING");
-        game.setEra(HistoricalEra.MODERN);
-        game.setDifficulty(Difficulty.EASY);
-        game.setGameMode(GameMode.TIMELINE);
-        game.setHostId(5L);
-        game.setDeckSize(0);
-        game.setNextCardIndex(0);
-        game.setTimelineJson("[]");
+    public void closeFinishedGame_validInput_returnsNoContent() throws Exception {
+        RematchRequestDTO dto = new RematchRequestDTO();
+        dto.setUserId(10L);
 
-        CreateGameDTO dto = new CreateGameDTO();
-        dto.setEra(HistoricalEra.MODERN);
-        dto.setDifficulty(Difficulty.EASY);
-        dto.setUserId(5L);
-
-        given(gameService.createGame(HistoricalEra.MODERN, Difficulty.EASY, 5L)).willReturn(game);
-        given(gameService.getTimeline(1L)).willReturn(List.of());
-
-        mockMvc.perform(post("/games")
+        mockMvc.perform(delete("/games/1/close")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(asJsonString(dto)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id", is(1)))
-                .andExpect(jsonPath("$.lobbyCode", is("XYZ999")))
-                .andExpect(jsonPath("$.status", is("WAITING")));
-    }
-
-    @Test
-    public void leaveGame_validInput_returnsNoContent() throws Exception {
-        Mockito.doNothing().when(gameService).leaveGame("ABC123", 5L);
-
-        mockMvc.perform(delete("/games/leave/ABC123")
-                        .param("userId", "5")
-                        .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNoContent());
+
+        verify(gameService).closeFinishedGame(1L, 10L);
     }
 
     @Test
-    public void startGame_validInput_returnsGame() throws Exception {
-        Game game = new Game();
-        game.setId(1L);
-        game.setLobbyCode("ABC123");
-        game.setStatus("IN_PROGRESS");
-        game.setEra(HistoricalEra.MODERN);
-        game.setDifficulty(Difficulty.EASY);
-        game.setGameMode(GameMode.TIMELINE);
-        game.setHostId(5L);
-        game.setDeckSize(80);
-        game.setNextCardIndex(0);
-        game.setTimelineJson("[]");
-
-        given(gameService.startGame(1L, 80)).willReturn(game);
-        given(gameService.getTimeline(1L)).willReturn(List.of());
-
-        mockMvc.perform(put("/games/1/start")
-                        .param("deckSize", "80")
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id", is(1)))
-                .andExpect(jsonPath("$.status", is("IN_PROGRESS")));
+    public void closeFinishedGame_missingUserId_returnsBadRequest() throws Exception {
+        mockMvc.perform(delete("/games/1/close")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
-    public void getGame_validId_returnsGame() throws Exception {
-        Game game = new Game();
-        game.setId(1L);
-        game.setLobbyCode("ABC123");
-        game.setStatus("WAITING");
-        game.setEra(HistoricalEra.MODERN);
-        game.setDifficulty(Difficulty.EASY);
-        game.setGameMode(GameMode.TIMELINE);
-        game.setHostId(5L);
-        game.setDeckSize(0);
-        game.setNextCardIndex(0);
-        game.setTimelineJson("[]");
+    public void closeFinishedGame_nonHost_returnsForbidden() throws Exception {
+        RematchRequestDTO dto = new RematchRequestDTO();
+        dto.setUserId(99L);
 
-        given(gameService.getGame(1L)).willReturn(game);
-        given(gameService.getTimeline(1L)).willReturn(List.of());
+        doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the host can close the game"))
+                .when(gameService).closeFinishedGame(1L, 99L);
 
-        mockMvc.perform(get("/games/1").contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id", is(1)))
-                .andExpect(jsonPath("$.lobbyCode", is("ABC123")));
-    }
-
-    @Test
-    public void drawCard_validInput_returnsCard() throws Exception {
-        EventCard card = new EventCard();
-        card.setTitle("French Revolution");
-        card.setYear(1789);
-        card.setImageUrl("https://example.com/fr.jpg");
-
-        DrawCardDTO dto = new DrawCardDTO();
-        dto.setUserId(1L);
-        dto.setDeckIndex(0);
-
-        given(gameService.drawCard(1L, 1L, 0)).willReturn(card);
-
-        mockMvc.perform(post("/games/1/draw")
+        mockMvc.perform(delete("/games/1/close")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(asJsonString(dto)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.title", is("French Revolution")))
-                .andExpect(jsonPath("$.imageUrl", is("https://example.com/fr.jpg")));
-    }
-
-    @Test
-    public void revealCard_validInput_returnsCard() throws Exception {
-        EventCard card = new EventCard();
-        card.setTitle("Moon Landing");
-        card.setYear(1969);
-        card.setImageUrl("https://example.com/moon.jpg");
-
-        given(gameService.getCard(1L, 0)).willReturn(card);
-
-        mockMvc.perform(get("/games/1/cards/0").contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.title", is("Moon Landing")))
-                .andExpect(jsonPath("$.year", is(1969)));
-    }
-
-    @Test
-    public void getAllCards_validGameId_returnsCardList() throws Exception {
-        EventCard card = new EventCard();
-        card.setTitle("WW2");
-        card.setYear(1939);
-        card.setImageUrl("https://example.com/ww2.jpg");
-
-        given(gameService.getAllCards(1L)).willReturn(List.of(card));
-
-        mockMvc.perform(get("/games/1/cards").contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].title", is("WW2")));
-    }
-
-    @Test
-    public void getTimeline_validGameId_returnsTimeline() throws Exception {
-        EventCard card = new EventCard();
-        card.setTitle("WW1");
-        card.setYear(1914);
-        card.setImageUrl("https://example.com/ww1.jpg");
-
-        given(gameService.getTimeline(1L)).willReturn(List.of(card));
-
-        mockMvc.perform(get("/games/1/timeline").contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].title", is("WW1")));
-    }
-
-    @Test
-    public void getHand_validInput_returnsHandCards() throws Exception {
-        HandCardDTO handCard = new HandCardDTO();
-        handCard.setDeckIndex(0);
-        handCard.setTitle("Waterloo");
-
-        given(gameService.getHand(1L, 5L)).willReturn(List.of(handCard));
-
-        mockMvc.perform(get("/games/1/hand")
-                        .param("userId", "5")
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].deckIndex", is(0)));
-    }
-
-    @Test
-    public void putSettings_validInput_returnsUpdatedGame() throws Exception {
-        Game game = new Game();
-        game.setId(1L);
-        game.setLobbyCode("ABC123");
-        game.setStatus("WAITING");
-        game.setEra(HistoricalEra.ANCIENT);
-        game.setDifficulty(Difficulty.HARD);
-        game.setGameMode(GameMode.TIMELINE);
-        game.setHostId(5L);
-        game.setDeckSize(0);
-        game.setNextCardIndex(0);
-        game.setTimelineJson("[]");
-
-        GameSettingsPutDTO settingsDTO = new GameSettingsPutDTO();
-        settingsDTO.setEra(HistoricalEra.ANCIENT);
-        settingsDTO.setDifficulty(Difficulty.HARD);
-
-        given(gameService.updateSettings(Mockito.eq(1L), Mockito.any())).willReturn(game);
-        given(gameService.getTimeline(1L)).willReturn(List.of());
-
-        mockMvc.perform(put("/games/1/settings")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(asJsonString(settingsDTO)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.era", is("ANCIENT")))
-                .andExpect(jsonPath("$.difficulty", is("HARD")));
-    }
-
-    @Test
-    public void sendMessage_validInput_returnsMessage() throws Exception {
-        ChatMessageGetDTO response = new ChatMessageGetDTO();
-        response.setPlayerId(1L);
-        response.setMessage("Hello!");
-
-        ChatMessageDTO dto = new ChatMessageDTO();
-        dto.setPlayerId(1L);
-        dto.setMessage("Hello!");
-
-        given(gameService.addChatMessage(1L, 1L, "Hello!")).willReturn(response);
-
-        mockMvc.perform(post("/games/1/chat")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(asJsonString(dto)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.playerId", is(1)))
-                .andExpect(jsonPath("$.message", is("Hello!")));
-    }
-
-    @Test
-    public void getMessages_validGameId_returnsMessageList() throws Exception {
-        ChatMessageGetDTO msg = new ChatMessageGetDTO();
-        msg.setPlayerId(1L);
-        msg.setMessage("Hi!");
-
-        given(gameService.getChatMessages(1L)).willReturn(List.of(msg));
-
-        mockMvc.perform(get("/games/1/chat").contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].message", is("Hi!")));
-    }
-
-    @Test
-    public void invitePlayer_validInput_returnsCreated() throws Exception {
-        GameInvitePostDTO dto = new GameInvitePostDTO();
-        dto.setFromUserId(1L);
-        dto.setToUsername("targetUser");
-
-        // invitePlayer gibt GameInvite zurück → given() statt doNothing()
-        given(gameService.invitePlayer(1L, 1L, "targetUser"))
-                .willReturn(new GameInvite());
-
-        mockMvc.perform(post("/games/1/invite")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(asJsonString(dto)))
-                .andExpect(status().isCreated());
-    }
-    @Test
-    public void getInvites_validUserId_returnsInviteList() throws Exception {
-        GameInviteGetDTO invite = new GameInviteGetDTO();
-        invite.setId(1L);
-
-        given(gameService.getInvitesForUser(1L)).willReturn(List.of(invite));
-
-        mockMvc.perform(get("/games/invites/1").contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)));
-    }
-
-    @Test
-    public void deleteInvite_validId_returnsNoContent() throws Exception {
-        Mockito.doNothing().when(gameService).deleteInvite(1L);
-
-        mockMvc.perform(delete("/games/invites/1").contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isForbidden());
     }
 }

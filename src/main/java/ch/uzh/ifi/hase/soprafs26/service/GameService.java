@@ -37,6 +37,7 @@ import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.Optional;
 
 @Service
 public class GameService {
@@ -86,7 +87,7 @@ public class GameService {
                         HttpStatus.NOT_FOUND, "User with id " + userId + " was not found"));
 
         Game game = new Game();
-        game.setLobbyCode(generateLobbyCode());
+        game.setLobbyCode(generateUniqueLobbyCode());
         game.setEra(era);
         game.setHostId(userId);
         game.setStatus("WAITING");
@@ -183,12 +184,19 @@ public class GameService {
                     "Only players from the finished game can create a rematch");
         }
 
+        // Wichtig: falls schon ein Rematch existiert, dieses zurückgeben
+        Optional<Game> existingRematch =
+                gameRepository.findByRematchFromGameIdAndStatus(oldGame.getId(), "WAITING");
+        if (existingRematch.isPresent()) {
+            return existingRematch.get();
+        }
+
         Game newGame = new Game();
-        newGame.setLobbyCode(generateLobbyCode());
+        newGame.setLobbyCode(generateUniqueLobbyCode());
         newGame.setEra(oldGame.getEra());
         newGame.setDifficulty(oldGame.getDifficulty());
         newGame.setGameMode(oldGame.getGameMode());
-        newGame.setHostId(oldGame.getHostId());
+        newGame.setHostId(requestingUserId); // sinnvoller als oldGame.getHostId()
         newGame.setStatus("WAITING");
         newGame.setDeckJson(null);
         newGame.setDeckSize(0);
@@ -196,7 +204,7 @@ public class GameService {
         newGame.setTimelineJson("[]");
         newGame.setRematchFromGameId(oldGame.getId());
 
-        newGame = gameRepository.save(newGame);
+        newGame = gameRepository.saveAndFlush(newGame);
 
         for (GamePlayer oldGp : oldPlayers) {
             GamePlayer newGp = new GamePlayer();
@@ -217,9 +225,54 @@ public class GameService {
             gamePlayerRepository.save(newGp);
         }
 
-        log.info("Created rematch game {} from finished game {}", newGame.getId(), oldGame.getId());
+        return newGame;
+    }
+
+
+
+    @Transactional
+    public Game createRematchAndCloseOldGame(Long finishedGameId, Long requestingUserId) {
+        Game oldGame = findGameOrThrow(finishedGameId);
+
+        if (!"FINISHED".equals(oldGame.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Only finished games can be rematched and closed");
+        }
+
+        if (!oldGame.getHostId().equals(requestingUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Only the host can create a rematch");
+        }
+
+        Game newGame = createRematch(finishedGameId, requestingUserId);
+
+        deleteFinishedGameInternal(oldGame);
 
         return newGame;
+    }
+
+    @Transactional
+    public void closeFinishedGame(Long finishedGameId, Long requestingUserId) {
+        Game game = findGameOrThrow(finishedGameId);
+
+        if (!"FINISHED".equals(game.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Only finished games can be closed");
+        }
+
+        if (!game.getHostId().equals(requestingUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Only the host can close the game");
+        }
+
+        deleteFinishedGameInternal(game);
+    }
+
+
+    private void deleteFinishedGameInternal(Game game) {
+        chatMessageRepository.deleteAllByGameId(game.getId());
+        gameInviteRepository.deleteAllByGameId(game.getId());
+        gameRepository.delete(game);
     }
 
     /**
@@ -746,14 +799,25 @@ public class GameService {
         }
     }
 
-    private String generateLobbyCode() {
+    private String generateUniqueLobbyCode() {
         String chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-        StringBuilder code = new StringBuilder();
-        for (int i = 0; i < 6; i++) {
-            code.append(chars.charAt(random.nextInt(chars.length())));
+
+        for (int attempt = 0; attempt < 100; attempt++) {
+            StringBuilder code = new StringBuilder();
+            for (int i = 0; i < 6; i++) {
+                code.append(chars.charAt(random.nextInt(chars.length())));
+            }
+
+            String lobbyCode = code.toString();
+            if (gameRepository.findByLobbyCode(lobbyCode).isEmpty()) {
+                return lobbyCode;
+            }
         }
-        return code.toString();
+
+        throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                "Could not generate unique lobby code");
     }
+
     @Transactional
     public void leaveGame(String lobbyCode, Long userId) {
         Game game = gameRepository.findByLobbyCode(lobbyCode)
@@ -949,7 +1013,6 @@ public class GameService {
         userRepository.flush();
         gameRepository.flush();
 
-        //gameRepository.delete(game);
 
         return finalResults;
     }
