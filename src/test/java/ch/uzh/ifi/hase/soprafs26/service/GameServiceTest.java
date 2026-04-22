@@ -20,6 +20,8 @@ import ch.uzh.ifi.hase.soprafs26.repository.ChatMessageRepository;
 import ch.uzh.ifi.hase.soprafs26.repository.GameInviteRepository;
 import ch.uzh.ifi.hase.soprafs26.constant.GameMode;
 import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
+import ch.uzh.ifi.hase.soprafs26.entity.GameInvite;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.GameSettingsPutDTO;
 
 import java.time.Instant;
 import java.util.List;
@@ -1664,5 +1666,132 @@ public class GameServiceTest {
                 gameService.getChatMessages(1L);
 
         assertTrue(result.isEmpty());
+    }
+    @Test
+    public void createGame_validInput_createsGameAndHostPlayer() {
+        User user = new User();
+        user.setId(10L);
+        user.setUsername("alex");
+
+        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
+        when(gameRepository.save(any(Game.class))).thenAnswer(inv -> {
+            Game g = inv.getArgument(0);
+            g.setId(1L);
+            return g;
+        });
+
+        Game result = gameService.createGame(HistoricalEra.MODERN, Difficulty.EASY, 10L);
+
+        assertNotNull(result);
+        assertNotNull(result.getLobbyCode());
+        assertEquals(HistoricalEra.MODERN, result.getEra());
+        assertEquals(10L, result.getHostId());
+        assertEquals("WAITING", result.getStatus());
+        verify(gamePlayerRepository, times(1)).save(any(GamePlayer.class));
+    }
+
+    @Test
+    public void createGame_nullEra_throwsBadRequest() {
+        assertThrows(ResponseStatusException.class,
+                () -> gameService.createGame(null, Difficulty.EASY, 10L));
+    }
+
+    @Test
+    public void getGame_validId_returnsGame() {
+        Game game = new Game();
+        game.setId(1L);
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+
+        Game result = gameService.getGame(1L);
+        assertEquals(1L, result.getId());
+    }
+
+    @Test
+    public void updateSettings_validInput_updatesGame() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("WAITING");
+
+        GameSettingsPutDTO dto = new GameSettingsPutDTO();
+        dto.setDifficulty(Difficulty.HARD);
+        dto.setEra(HistoricalEra.ANCIENT);
+        dto.setGameMode(GameMode.TIMELINE);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gameRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Game result = gameService.updateSettings(1L, dto);
+
+        assertEquals(Difficulty.HARD, result.getDifficulty());
+        assertEquals(HistoricalEra.ANCIENT, result.getEra());
+    }
+
+    @Test
+    public void updateSettings_gameAlreadyStarted_throwsConflict() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("INPROGRESS");
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+
+        GameSettingsPutDTO dto = new GameSettingsPutDTO();
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> gameService.updateSettings(1L, dto));
+        assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+    }
+
+    @Test
+    public void invitePlayer_validInput_savesInvite() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setLobbyCode("ABC123");
+
+        User fromUser = new User(); fromUser.setId(10L); fromUser.setUsername("alex");
+        User toUser = new User();   toUser.setId(11L);   toUser.setUsername("bob");
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(userRepository.findById(10L)).thenReturn(Optional.of(fromUser));
+        when(userRepository.findByUsername("bob")).thenReturn(toUser);
+        when(gameInviteRepository.existsByGameIdAndToUserId(1L, 11L)).thenReturn(false);
+        when(gameInviteRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        GameInvite invite = gameService.invitePlayer(1L, 10L, "bob");
+
+        assertNotNull(invite);
+        assertEquals(1L, invite.getGameId());
+        assertEquals("alex", invite.getFromUsername());
+    }
+
+    @Test
+    public void invitePlayer_toSelf_throwsBadRequest() {
+        Game game = new Game(); game.setId(1L);
+        User user = new User(); user.setId(10L); user.setUsername("alex");
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
+        when(userRepository.findByUsername("alex")).thenReturn(user);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> gameService.invitePlayer(1L, 10L, "alex"));
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+    }
+
+    @Test
+    public void leaveGame_validInput_removesPlayer() {
+        Game game = new Game(); game.setId(1L); game.setLobbyCode("ABC123");
+        game.setStatus("WAITING"); game.setHostId(99L);
+        User user = new User(); user.setId(10L); user.setUsername("alex");
+
+        when(gameRepository.findByLobbyCode("ABC123")).thenReturn(Optional.of(game));
+        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
+        when(gamePlayerRepository.existsByGameAndUser(game, user)).thenReturn(true);
+
+        GamePlayer remaining = new GamePlayer(); remaining.setUser(user);
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game))
+                .thenReturn(List.of(remaining));
+
+        gameService.leaveGame("ABC123", 10L);
+
+        verify(gamePlayerRepository, times(1)).deleteByGameAndUser(game, user);
     }
 }

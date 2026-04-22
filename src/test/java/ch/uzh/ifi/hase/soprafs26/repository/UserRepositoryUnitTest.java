@@ -11,7 +11,7 @@ import java.time.Instant;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DataJpaTest
-public class UserRepositoryIntegrationTest {
+public class UserRepositoryUnitTest {
 
     @Autowired
     private UserRepository userRepository;
