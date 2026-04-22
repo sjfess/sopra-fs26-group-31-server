@@ -336,7 +336,7 @@ public class WikidataService {
 
     // SPARQL-call
 
-    private List<EventCard> runSparql(String sparql) {
+    List<EventCard> runSparql(String sparql) {
         String encodedQuery = URLEncoder.encode(sparql, StandardCharsets.UTF_8);
         URI uri = URI.create(SPARQL_ENDPOINT + "?query=" + encodedQuery);
 
