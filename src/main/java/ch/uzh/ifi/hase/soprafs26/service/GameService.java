@@ -331,7 +331,7 @@ public class GameService {
     }
 
     /**
-     * Draws the next card for the active player.
+     * Selects a card from the active player's hand.
      */
     public EventCard drawCard(Long gameId, Long userId, int deckIndex) {
         Game game = findGameOrThrow(gameId);
@@ -365,7 +365,6 @@ public class GameService {
         }
 
         player.setCurrentCardIndex(deckIndex);
-        player.setTurnStartedAt(Instant.now());
         gamePlayerRepository.save(player);
 
         return deck.get(deckIndex);

@@ -514,7 +514,7 @@ public class GameServiceTest {
 
         assertEquals("Berlin Wall", drawnCard.getTitle());
         assertEquals(1, activePlayer.getCurrentCardIndex());
-        assertNotNull(activePlayer.getTurnStartedAt());
+        assertNull(activePlayer.getTurnStartedAt());
     }
 
     @Test
