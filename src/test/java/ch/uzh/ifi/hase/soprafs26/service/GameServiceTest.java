@@ -24,6 +24,11 @@ import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.ArrayList;
+import java.util.Collections;
+
+import org.mockito.ArgumentCaptor;
+import static org.mockito.ArgumentMatchers.anyInt;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -104,6 +109,7 @@ public class GameServiceTest {
 
         when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
         when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
+        when(wikidataService.getCuratedCards(any())).thenReturn(Collections.emptyList());
         when(wikidataService.fetchEvents(HistoricalEra.MODERN, 10)).thenReturn(deck);
 
         Game startedGame = gameService.startGame(1L, 10);
@@ -798,7 +804,7 @@ public class GameServiceTest {
         gp1.setGame(game);
         gp1.setUser(user1);
         gp1.setScore(4);
-        gp1.setCorrectPlacements(4);
+        gp1.setCo
         gp1.setIncorrectPlacements(1);
 
         GamePlayer gp2 = new GamePlayer();
@@ -1410,6 +1416,350 @@ public class GameServiceTest {
 
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
         verify(gamePlayerRepository, never()).save(any(GamePlayer.class));
+    }
+
+    private EventCard makeCard(String title, int year) {
+        EventCard card = new EventCard();
+        card.setTitle(title);
+        card.setYear(year);
+        return card;
+    }
+
+    @Test
+    public void startGame_easyDifficulty_seedsOneTimelineCard() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setEra(HistoricalEra.MODERN);
+        game.setDifficulty(Difficulty.EASY);
+        game.setStatus("WAITING");
+        game.setTimelineJson("[]");
+        game.setGameMode(GameMode.TIMELINE);
+
+        User user1 = new User();
+        user1.setId(10L);
+        user1.setUsername("alex");
+
+        User user2 = new User();
+        user2.setId(11L);
+        user2.setUsername("mia");
+
+        GamePlayer gp1 = new GamePlayer();
+        gp1.setId(100L);
+        gp1.setGame(game);
+        gp1.setUser(user1);
+        gp1.setTurnOrder(0);
+        gp1.setScore(0);
+        gp1.setActiveTurn(false);
+
+        GamePlayer gp2 = new GamePlayer();
+        gp2.setId(101L);
+        gp2.setGame(game);
+        gp2.setUser(user2);
+        gp2.setTurnOrder(1);
+        gp2.setScore(0);
+        gp2.setActiveTurn(false);
+
+        EventCard seedCard = makeCard("Seeded Card", 1800);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
+        when(wikidataService.getCuratedCards(any())).thenReturn(List.of(seedCard));
+        when(wikidataService.fetchEvents(any(), anyInt())).thenReturn(new ArrayList<>());
+
+        gameService.startGame(1L, 10);
+
+        ArgumentCaptor<Game> captor = ArgumentCaptor.forClass(Game.class);
+        verify(gameRepository, atLeastOnce()).save(captor.capture());
+        Game saved = captor.getAllValues().stream()
+                .filter(g -> g.getTimelineJson() != null && !g.getTimelineJson().equals("[]"))
+                .findFirst().orElseThrow();
+
+        List<EventCard> timeline = gameService.deserializeDeck(saved.getTimelineJson());
+        assertEquals(1, timeline.size());
+        assertEquals("Seeded Card", timeline.get(0).getTitle());
+    }
+
+    @Test
+    public void finalizeGame_validInput_includesBestStreakInResults() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+
+        User user1 = new User();
+        user1.setId(10L);
+        user1.setUsername("alex");
+        user1.setTotalGamesPlayed(0);
+        user1.setTotalWins(0);
+        user1.setTotalPoints(0);
+        user1.setTotalCorrectPlacements(0);
+        user1.setTotalIncorrectPlacements(0);
+
+        User user2 = new User();
+        user2.setId(11L);
+        user2.setUsername("mia");
+        user2.setTotalGamesPlayed(0);
+        user2.setTotalWins(0);
+        user2.setTotalPoints(0);
+        user2.setTotalCorrectPlacements(0);
+        user2.setTotalIncorrectPlacements(0);
+
+        GamePlayer gp1 = new GamePlayer();
+        gp1.setGame(game);
+        gp1.setUser(user1);
+        gp1.setScore(5);
+        gp1.setCorrectPlacements(5);
+        gp1.setIncorrectPlacements(1);
+        gp1.setBestStreak(4);
+
+        GamePlayer gp2 = new GamePlayer();
+        gp2.setGame(game);
+        gp2.setUser(user2);
+        gp2.setScore(3);
+        gp2.setCorrectPlacements(3);
+        gp2.setIncorrectPlacements(2);
+        gp2.setBestStreak(2);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findAllByGameOrderByScoreDescTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<FinalResultDTO> results = gameService.finalizeGame(1L);
+
+        assertEquals(2, results.size());
+        assertEquals(4, results.get(0).getBestStreak());
+        assertEquals(2, results.get(1).getBestStreak());
+    }
+
+    @Test
+    public void startGame_mediumDifficulty_seedsThreeTimelineCards() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setEra(HistoricalEra.MODERN);
+        game.setDifficulty(Difficulty.MEDIUM);
+        game.setStatus("WAITING");
+        game.setTimelineJson("[]");
+        game.setGameMode(GameMode.TIMELINE);
+
+        User user1 = new User();
+        user1.setId(10L);
+        user1.setUsername("alex");
+
+        User user2 = new User();
+        user2.setId(11L);
+        user2.setUsername("mia");
+
+        GamePlayer gp1 = new GamePlayer();
+        gp1.setId(100L);
+        gp1.setGame(game);
+        gp1.setUser(user1);
+        gp1.setTurnOrder(0);
+        gp1.setScore(0);
+        gp1.setActiveTurn(false);
+
+        GamePlayer gp2 = new GamePlayer();
+        gp2.setId(101L);
+        gp2.setGame(game);
+        gp2.setUser(user2);
+        gp2.setTurnOrder(1);
+        gp2.setScore(0);
+        gp2.setActiveTurn(false);
+
+        List<EventCard> curated = List.of(
+                makeCard("Card A", 1200),
+                makeCard("Card B", 1300),
+                makeCard("Card C", 1400)
+        );
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
+        when(wikidataService.getCuratedCards(any())).thenReturn(curated);
+        when(wikidataService.fetchEvents(any(), anyInt())).thenReturn(new ArrayList<>());
+
+        gameService.startGame(1L, 10);
+
+        ArgumentCaptor<Game> captor = ArgumentCaptor.forClass(Game.class);
+        verify(gameRepository, atLeastOnce()).save(captor.capture());
+        Game saved = captor.getAllValues().stream()
+                .filter(g -> g.getTimelineJson() != null && !g.getTimelineJson().equals("[]"))
+                .findFirst().orElseThrow();
+
+        List<EventCard> timeline = gameService.deserializeDeck(saved.getTimelineJson());
+        assertEquals(3, timeline.size());
+    }
+
+    @Test
+    public void startGame_hardDifficulty_seedsFiveTimelineCards() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setEra(HistoricalEra.MODERN);
+        game.setDifficulty(Difficulty.HARD);
+        game.setStatus("WAITING");
+        game.setTimelineJson("[]");
+        game.setGameMode(GameMode.TIMELINE);
+
+        User user1 = new User();
+        user1.setId(10L);
+        user1.setUsername("alex");
+
+        User user2 = new User();
+        user2.setId(11L);
+        user2.setUsername("mia");
+
+        GamePlayer gp1 = new GamePlayer();
+        gp1.setId(100L);
+        gp1.setGame(game);
+        gp1.setUser(user1);
+        gp1.setTurnOrder(0);
+        gp1.setScore(0);
+        gp1.setActiveTurn(false);
+
+        GamePlayer gp2 = new GamePlayer();
+        gp2.setId(101L);
+        gp2.setGame(game);
+        gp2.setUser(user2);
+        gp2.setTurnOrder(1);
+        gp2.setScore(0);
+        gp2.setActiveTurn(false);
+
+        List<EventCard> curated = List.of(
+                makeCard("Card A", 1100),
+                makeCard("Card B", 1200),
+                makeCard("Card C", 1300),
+                makeCard("Card D", 1400),
+                makeCard("Card E", 1500)
+        );
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
+        when(wikidataService.getCuratedCards(any())).thenReturn(curated);
+        when(wikidataService.fetchEvents(any(), anyInt())).thenReturn(new ArrayList<>());
+
+        gameService.startGame(1L, 10);
+
+        ArgumentCaptor<Game> captor = ArgumentCaptor.forClass(Game.class);
+        verify(gameRepository, atLeastOnce()).save(captor.capture());
+        Game saved = captor.getAllValues().stream()
+                .filter(g -> g.getTimelineJson() != null && !g.getTimelineJson().equals("[]"))
+                .findFirst().orElseThrow();
+
+        List<EventCard> timeline = gameService.deserializeDeck(saved.getTimelineJson());
+        assertEquals(5, timeline.size());
+    }
+
+    @Test
+    public void startGame_timelineCardsExcludedFromDeck() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setEra(HistoricalEra.MODERN);
+        game.setDifficulty(Difficulty.EASY);
+        game.setStatus("WAITING");
+        game.setTimelineJson("[]");
+        game.setGameMode(GameMode.TIMELINE);
+
+        User user1 = new User();
+        user1.setId(10L);
+        user1.setUsername("alex");
+
+        User user2 = new User();
+        user2.setId(11L);
+        user2.setUsername("mia");
+
+        GamePlayer gp1 = new GamePlayer();
+        gp1.setId(100L);
+        gp1.setGame(game);
+        gp1.setUser(user1);
+        gp1.setTurnOrder(0);
+        gp1.setScore(0);
+        gp1.setActiveTurn(false);
+
+        GamePlayer gp2 = new GamePlayer();
+        gp2.setId(101L);
+        gp2.setGame(game);
+        gp2.setUser(user2);
+        gp2.setTurnOrder(1);
+        gp2.setScore(0);
+        gp2.setActiveTurn(false);
+
+        EventCard seedCard = makeCard("Seeded Card", 1800);
+        EventCard deckCard = makeCard("Regular Card", 1900);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
+        when(wikidataService.getCuratedCards(any())).thenReturn(List.of(seedCard));
+        when(wikidataService.fetchEvents(any(), anyInt()))
+                .thenReturn(new ArrayList<>(List.of(seedCard, deckCard)));
+
+        gameService.startGame(1L, 10);
+
+        ArgumentCaptor<Game> captor = ArgumentCaptor.forClass(Game.class);
+        verify(gameRepository, atLeastOnce()).save(captor.capture());
+        Game saved = captor.getAllValues().stream()
+                .filter(g -> g.getDeckJson() != null)
+                .findFirst().orElseThrow();
+
+        List<EventCard> deck = gameService.deserializeDeck(saved.getDeckJson());
+        assertTrue(deck.stream().noneMatch(c -> c.getTitle().equals("Seeded Card")));
+        assertTrue(deck.stream().anyMatch(c -> c.getTitle().equals("Regular Card")));
+    }
+
+    @Test
+    public void startGame_timelineCardsOrderedChronologically() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setEra(HistoricalEra.MODERN);
+        game.setDifficulty(Difficulty.MEDIUM);
+        game.setStatus("WAITING");
+        game.setTimelineJson("[]");
+        game.setGameMode(GameMode.TIMELINE);
+
+        User user1 = new User();
+        user1.setId(10L);
+        user1.setUsername("alex");
+
+        User user2 = new User();
+        user2.setId(11L);
+        user2.setUsername("mia");
+
+        GamePlayer gp1 = new GamePlayer();
+        gp1.setId(100L);
+        gp1.setGame(game);
+        gp1.setUser(user1);
+        gp1.setTurnOrder(0);
+        gp1.setScore(0);
+        gp1.setActiveTurn(false);
+
+        GamePlayer gp2 = new GamePlayer();
+        gp2.setId(101L);
+        gp2.setGame(game);
+        gp2.setUser(user2);
+        gp2.setTurnOrder(1);
+        gp2.setScore(0);
+        gp2.setActiveTurn(false);
+
+        // Deliberately out of order
+        List<EventCard> curated = List.of(
+                makeCard("Late Card",  1900),
+                makeCard("Early Card", 1776),
+                makeCard("Mid Card",   1850)
+        );
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
+        when(wikidataService.getCuratedCards(any())).thenReturn(curated);
+        when(wikidataService.fetchEvents(any(), anyInt())).thenReturn(new ArrayList<>());
+
+        gameService.startGame(1L, 10);
+
+        ArgumentCaptor<Game> captor = ArgumentCaptor.forClass(Game.class);
+        verify(gameRepository, atLeastOnce()).save(captor.capture());
+        Game saved = captor.getAllValues().stream()
+                .filter(g -> g.getTimelineJson() != null && !g.getTimelineJson().equals("[]"))
+                .findFirst().orElseThrow();
+
+        List<EventCard> timeline = gameService.deserializeDeck(saved.getTimelineJson());
+        assertEquals(1776, timeline.get(0).getYear());
+        assertEquals(1850, timeline.get(1).getYear());
+        assertEquals(1900, timeline.get(2).getYear());
     }
 
     @Test

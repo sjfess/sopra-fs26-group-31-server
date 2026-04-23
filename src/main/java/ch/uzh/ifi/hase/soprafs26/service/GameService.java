@@ -38,6 +38,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.Optional;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Set;
 
 @Service
 public class GameService {
@@ -294,39 +298,63 @@ public class GameService {
 
         log.info("Starting game {} – fetching {} cards for era {}", gameId, deckSize, game.getEra());
 
-        List<EventCard> deck = wikidataService.fetchEvents(game.getEra(), deckSize);
+        // Determine how many curated cards to pre-seed on the timeline based on difficulty
+        int timelineSeedCount = getTimelineSeedCount(game.getDifficulty());
+
+        // Get curated cards for this era and pick the seed cards
+        List<EventCard> allCurated = new ArrayList<>(wikidataService.getCuratedCards(game.getEra()));
+        Collections.shuffle(allCurated);
+        List<EventCard> timelineSeedCards = new ArrayList<>();
+        for (int i = 0; i < Math.min(timelineSeedCount, allCurated.size()); i++) {
+            timelineSeedCards.add(allCurated.get(i));
+        }
+
+        // Build a set of excluded titles so the main deck does not contain the seed cards
+        Set<String> excludedTitles = new HashSet<>();
+        for (EventCard seed : timelineSeedCards) {
+            excludedTitles.add(seed.getTitle().toLowerCase());
+        }
+
+        // Fetch the main deck and filter out any cards that are already on the timeline
+        List<EventCard> rawDeck = wikidataService.fetchEvents(game.getEra(), deckSize + timelineSeedCount);
+        List<EventCard> deck = new ArrayList<>();
+        for (EventCard card : rawDeck) {
+            if (!excludedTitles.contains(card.getTitle().toLowerCase())) {
+                deck.add(card);
+                if (deck.size() >= deckSize) break;
+            }
+        }
+
+        // Sort the seed cards chronologically so the timeline is ordered
+        timelineSeedCards.sort(Comparator.comparingInt(EventCard::getYear));
 
         game.setDeckJson(serializeDeck(deck));
         game.setDeckSize(deck.size());
         game.setNextCardIndex(0);
         game.setStatus("IN_PROGRESS");
-        game.setTimelineJson("[]");
+        game.setTimelineJson(serializeDeck(timelineSeedCards));
+        log.info("Game {} seeded timeline with {} curated cards (difficulty: {})",
+                gameId, timelineSeedCards.size(), game.getDifficulty());
 
+        int cardsPerPlayer = 5;
         for (int i = 0; i < gamePlayers.size(); i++) {
-            GamePlayer gamePlayer = gamePlayers.get(i);
-            gamePlayer.setScore(0);
-
+            GamePlayer gp = gamePlayers.get(i);
+            gp.setScore(0);
+            gp.setCorrectStreak(0);
+            gp.setBestStreak(0);
+            gp.setHandIndicesJson("[]");
+            gp.setTurnStartedAt(null);
+            dealCardsToPlayer(gp, game, cardsPerPlayer);
             if (i == 0) {
-                gamePlayer.setActiveTurn(true);
-                gamePlayer.setTurnStartedAt(Instant.now());
+                gp.setActiveTurn(true);
+                gp.setTurnStartedAt(Instant.now());
             } else {
-                gamePlayer.setActiveTurn(false);
-                gamePlayer.setTurnStartedAt(null);
+                gp.setActiveTurn(false);
             }
-
-            gamePlayer.setCurrentCardIndex(null);
-            gamePlayer.setHandIndicesJson(null);
-            gamePlayer.setCorrectPlacements(0);
-            gamePlayer.setIncorrectPlacements(0);
-            gamePlayer.setCorrectStreak(0);
-            gamePlayer.setBestStreak(0);
-            dealCardsToPlayer(gamePlayer, game, INITIAL_HAND_SIZE);
-
-            gamePlayerRepository.save(gamePlayer);
+            gamePlayerRepository.save(gp);
         }
 
-        game = gameRepository.save(game);
-        log.info("Game {} started with {} cards", gameId, deck.size());
+        gameRepository.save(game);
         return game;
     }
 
@@ -789,6 +817,16 @@ public class GameService {
         return gameRepository.findById(gameId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Game " + gameId + " not found"));
+    }
+
+    private int getTimelineSeedCount(Difficulty difficulty) {
+        if (difficulty == null) return 0;
+        switch (difficulty) {
+            case EASY:   return 1;
+            case MEDIUM: return 3;
+            case HARD:   return 5;
+            default:     return 0;
+        }
     }
 
     private void assertInProgress(Game game) {
