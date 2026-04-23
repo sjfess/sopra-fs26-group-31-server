@@ -23,7 +23,7 @@ import ch.uzh.ifi.hase.soprafs26.rest.dto.GameInvitePostDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GameInviteGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.DrawCardDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.RematchRequestDTO;
-
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -239,6 +239,10 @@ public class GameController {
     public GameGetDTO createRematch(
             @PathVariable Long gameId,
             @RequestBody RematchRequestDTO rematchRequestDTO) {
+
+        if (rematchRequestDTO == null || rematchRequestDTO.getUserId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId is required");
+        }
 
         Game rematch = gameService.createRematch(gameId, rematchRequestDTO.getUserId());
         return toGameGetDTO(rematch);

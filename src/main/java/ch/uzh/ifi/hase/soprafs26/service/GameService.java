@@ -517,6 +517,7 @@ public class GameService {
             dto.setScore(gamePlayer.getScore());
             dto.setTurnOrder(gamePlayer.getTurnOrder());
             dto.setActiveTurn(gamePlayer.getActiveTurn());
+            dto.setTurnStartedAt(gamePlayer.getTurnStartedAt());
             dto.setCorrectStreak(gamePlayer.getCorrectStreak());
             dto.setBestStreak(gamePlayer.getBestStreak());
             dto.setCardsInHand(gamePlayer.getCardsInHand());

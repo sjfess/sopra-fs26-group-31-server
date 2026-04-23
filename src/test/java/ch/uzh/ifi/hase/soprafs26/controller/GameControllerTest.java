@@ -113,6 +113,8 @@ public class GameControllerTest {
         result1.setCorrectPlacements(5);
         result1.setIncorrectPlacements(1);
         result1.setWinner(true);
+        result1.setBestStreak(4);
+
 
         FinalResultDTO result2 = new FinalResultDTO();
         result2.setUserId(2L);
@@ -121,6 +123,7 @@ public class GameControllerTest {
         result2.setCorrectPlacements(3);
         result2.setIncorrectPlacements(2);
         result2.setWinner(false);
+        result2.setBestStreak(2);
 
         given(gameService.finalizeGame(1L)).willReturn(List.of(result1, result2));
 
@@ -134,12 +137,14 @@ public class GameControllerTest {
                 .andExpect(jsonPath("$[0].correctPlacements", is(5)))
                 .andExpect(jsonPath("$[0].incorrectPlacements", is(1)))
                 .andExpect(jsonPath("$[0].winner", is(true)))
+                .andExpect(jsonPath("$[0].bestStreak", is(4)))
                 .andExpect(jsonPath("$[1].userId", is(2)))
                 .andExpect(jsonPath("$[1].username", is("mia")))
                 .andExpect(jsonPath("$[1].score", is(3)))
                 .andExpect(jsonPath("$[1].correctPlacements", is(3)))
                 .andExpect(jsonPath("$[1].incorrectPlacements", is(2)))
-                .andExpect(jsonPath("$[1].winner", is(false)));
+                .andExpect(jsonPath("$[1].winner", is(false)))
+                .andExpect(jsonPath("$[1].bestStreak", is(2)));
     }
 
     @Test
@@ -210,5 +215,47 @@ public class GameControllerTest {
                 .andExpect(jsonPath("$.hostId", is(10)))
                 .andExpect(jsonPath("$.cardsRemaining", is(0)))
                 .andExpect(jsonPath("$.timelineSize", is(0)));
+    }
+
+    @Test
+    public void createRematch_missingUserId_returnsBadRequest() throws Exception {
+        mockMvc.perform(post("/games/1/rematch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void createRematch_gameNotFinished_returnsConflict() throws Exception {
+        RematchRequestDTO dto = new RematchRequestDTO();
+        dto.setUserId(10L);
+
+        given(gameService.createRematch(1L, 10L))
+                .willThrow(new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Rematch can only be created from a finished game"
+                ));
+
+        mockMvc.perform(post("/games/1/rematch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(asJsonString(dto)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    public void createRematch_requestingUserNotPlayer_returnsForbidden() throws Exception {
+        RematchRequestDTO dto = new RematchRequestDTO();
+        dto.setUserId(999L);
+
+        given(gameService.createRematch(1L, 999L))
+                .willThrow(new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "Only players from the finished game can create a rematch"
+                ));
+
+        mockMvc.perform(post("/games/1/rematch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(asJsonString(dto)))
+                .andExpect(status().isForbidden());
     }
 }
