@@ -211,6 +211,7 @@ public class GameController {
         dto.setCardsRemaining(game.getDeckSize() - game.getNextCardIndex());
         List<EventCard> timeline = gameService.getTimeline(game.getId());
         dto.setTimelineSize(timeline.size());
+        dto.setRematchGameId(gameService.findWaitingRematchId(game.getId()).orElse(null));
         return dto;
     }
 

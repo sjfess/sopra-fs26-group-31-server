@@ -249,10 +249,12 @@ public class GameService {
         }
 
         Game newGame = createRematch(finishedGameId, requestingUserId);
-
-        deleteFinishedGameInternal(oldGame);
-
         return newGame;
+    }
+
+    public Optional<Long> findWaitingRematchId(Long gameId) {
+        return gameRepository.findByRematchFromGameIdAndStatus(gameId, "WAITING")
+                .map(Game::getId);
     }
 
     @Transactional
@@ -336,7 +338,7 @@ public class GameService {
         log.info("Game {} seeded timeline with {} curated cards (difficulty: {})",
                 gameId, timelineSeedCards.size(), game.getDifficulty());
 
-        int cardsPerPlayer = 5;
+        int cardsPerPlayer = INITIAL_HAND_SIZE;
         for (int i = 0; i < gamePlayers.size(); i++) {
             GamePlayer gp = gamePlayers.get(i);
             gp.setScore(0);
