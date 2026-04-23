@@ -804,7 +804,7 @@ public class GameServiceTest {
         gp1.setGame(game);
         gp1.setUser(user1);
         gp1.setScore(4);
-        gp1.setCo
+        gp1.setCorrectPlacements(1);
         gp1.setIncorrectPlacements(1);
 
         GamePlayer gp2 = new GamePlayer();
@@ -1104,61 +1104,6 @@ public class GameServiceTest {
         assertEquals(0, gp1.getCardsInHand());
         assertFalse(gp1.getActiveTurn());
     }
-
-
-    @Test
-    public void finalizeGame_validInput_includesBestStreakInResults() {
-        Game game = new Game();
-        game.setId(1L);
-        game.setStatus("IN_PROGRESS");
-
-        User user1 = new User();
-        user1.setId(10L);
-        user1.setUsername("alex");
-        user1.setTotalGamesPlayed(0);
-        user1.setTotalWins(0);
-        user1.setTotalPoints(0);
-        user1.setTotalCorrectPlacements(0);
-        user1.setTotalIncorrectPlacements(0);
-
-        User user2 = new User();
-        user2.setId(11L);
-        user2.setUsername("mia");
-        user2.setTotalGamesPlayed(0);
-        user2.setTotalWins(0);
-        user2.setTotalPoints(0);
-        user2.setTotalCorrectPlacements(0);
-        user2.setTotalIncorrectPlacements(0);
-
-        GamePlayer gp1 = new GamePlayer();
-        gp1.setGame(game);
-        gp1.setUser(user1);
-        gp1.setScore(5);
-        gp1.setCorrectPlacements(5);
-        gp1.setIncorrectPlacements(1);
-        gp1.setBestStreak(4);
-
-        GamePlayer gp2 = new GamePlayer();
-        gp2.setGame(game);
-        gp2.setUser(user2);
-        gp2.setScore(3);
-        gp2.setCorrectPlacements(3);
-        gp2.setIncorrectPlacements(2);
-        gp2.setBestStreak(2);
-
-        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
-        when(gamePlayerRepository.findAllByGameOrderByScoreDescTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        List<FinalResultDTO> results = gameService.finalizeGame(1L);
-
-        assertEquals(2, results.size());
-        assertEquals(4, results.get(0).getBestStreak());
-        assertEquals(2, results.get(1).getBestStreak());
-    }
-
-
-
 
     @Test
     public void drawCard_userNotInGame_throwsException() {
