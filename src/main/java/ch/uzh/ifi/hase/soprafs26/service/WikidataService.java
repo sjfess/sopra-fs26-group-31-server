@@ -450,7 +450,7 @@ public class WikidataService {
      * - Inventions (P575): results are drowned in asteroid discoveries.
      * - Major constructions (P571): only works with exact type IDs, fragile.
      */
-    private List<EventCard> getCuratedCards(HistoricalEra era) {
+    public List<EventCard> getCuratedCards(HistoricalEra era) {
         List<EventCard> all = new ArrayList<>();
 
         // Ancient: famous people, constructions & milestones
