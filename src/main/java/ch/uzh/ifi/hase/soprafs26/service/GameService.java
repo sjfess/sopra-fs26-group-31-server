@@ -249,7 +249,7 @@ public class GameService {
         int timelineSeedCount = getTimelineSeedCount(game.getDifficulty());
 
         // Get curated cards for this era and pick the seed cards
-        List<EventCard> allCurated = wikidataService.getCuratedCards(game.getEra());
+        List<EventCard> allCurated = new ArrayList<>(wikidataService.getCuratedCards(game.getEra()));
         Collections.shuffle(allCurated);
         List<EventCard> timelineSeedCards = new ArrayList<>();
         for (int i = 0; i < Math.min(timelineSeedCount, allCurated.size()); i++) {
@@ -282,6 +282,26 @@ public class GameService {
         game.setTimelineJson(serializeDeck(timelineSeedCards));
         log.info("Game {} seeded timeline with {} curated cards (difficulty: {})",
                 gameId, timelineSeedCards.size(), game.getDifficulty());
+
+        int cardsPerPlayer = 5;
+        for (int i = 0; i < gamePlayers.size(); i++) {
+            GamePlayer gp = gamePlayers.get(i);
+            gp.setScore(0);
+            gp.setCorrectStreak(0);
+            gp.setBestStreak(0);
+            gp.setHandIndicesJson("[]");
+            gp.setTurnStartedAt(null);
+            dealCardsToPlayer(gp, game, cardsPerPlayer);
+            if (i == 0) {
+                gp.setActiveTurn(true);
+                gp.setTurnStartedAt(Instant.now());
+            } else {
+                gp.setActiveTurn(false);
+            }
+            gamePlayerRepository.save(gp);
+        }
+
+        gameRepository.save(game);
         return game;
     }
 
