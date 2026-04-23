@@ -7,6 +7,7 @@ import ch.uzh.ifi.hase.soprafs26.constant.GameMode;
 
 import jakarta.persistence.*;
 import java.io.Serializable;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.ArrayList;
@@ -79,6 +80,9 @@ public class Game implements Serializable {
     @Column(columnDefinition = "TEXT")
     private String timelineJson;
 
+    @Column
+    private Instant createdAt;
+
 
     // Getters & setters
     public int getMaxPlayers() { return maxPlayers; }
@@ -131,4 +135,8 @@ public class Game implements Serializable {
     public void setRematchFromGameId(Long rematchFromGameId) {
         this.rematchFromGameId = rematchFromGameId;
     }
+
+    public Instant getCreatedAt() { return createdAt; }
+    
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 }
