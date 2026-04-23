@@ -100,7 +100,7 @@ public class GameService {
         game.setDeckSize(0);
         game.setTimelineJson("[]");
         game.setGameMode(GameMode.TIMELINE);
-
+        game.setCreatedAt(Instant.now());
         game = gameRepository.save(game);
         log.info("Created game {} with lobby code {} for era {}",
                 game.getId(), game.getLobbyCode(), era);
@@ -886,6 +886,12 @@ public class GameService {
             return;
         }
 
+        // turn-renumbering if player leaves mid-game
+        for (int i = 0; i < remaining.size(); i++) {
+            remaining.get(i).setTurnOrder(i);
+            gamePlayerRepository.save(remaining.get(i));
+        }
+
         // ── Fall 2: Host hat verlassen → zufälligen neuen Host bestimmen ───────
         if (game.getHostId().equals(userId)) {
             GamePlayer newHost = remaining.get(random.nextInt(remaining.size()));
@@ -1046,6 +1052,8 @@ public class GameService {
         }
 
         game.setStatus("FINISHED");
+        chatMessageRepository.deleteAllByGameId(game.getId());
+        gameInviteRepository.deleteAllByGameId(game.getId());
         gameRepository.save(game);
         userRepository.flush();
         gameRepository.flush();
@@ -1151,6 +1159,19 @@ public class GameService {
 
     public void deleteInvite(Long inviteId) {
         gameInviteRepository.deleteById(inviteId);
+    }
+
+    // cleans up abandoned games after 30 minutes
+    @Scheduled(fixedDelay = 1800000)
+    @Transactional
+    public void cleanupAbandonedGames() {
+        Instant cutoff = Instant.now().minus(Duration.ofHours(3));
+        for (Game game : gameRepository.findAll()) {
+            if ("FINISHED".equals(game.getStatus()) ||
+                    (game.getCreatedAt() != null && game.getCreatedAt().isBefore(cutoff))) {
+                deleteFinishedGameInternal(game);
+            }
+        }
     }
 
 }

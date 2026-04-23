@@ -21,6 +21,7 @@ import ch.uzh.ifi.hase.soprafs26.repository.GameInviteRepository;
 import ch.uzh.ifi.hase.soprafs26.constant.GameMode;
 import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -2060,6 +2061,100 @@ public class GameServiceTest {
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
         verify(chatMessageRepository, never()).deleteAllByGameId(anyLong());
         verify(gameInviteRepository, never()).deleteAllByGameId(anyLong());
+        verify(gameRepository, never()).delete(any(Game.class));
+    }
+
+    @Test
+    public void leaveGame_middlePlayerLeaves_renumbersTurnOrder() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("WAITING");
+        game.setLobbyCode("ABC123");
+        game.setHostId(10L);
+
+        User user1 = new User(); user1.setId(10L); user1.setUsername("alex");
+        User user2 = new User(); user2.setId(11L); user2.setUsername("mia");
+        User user3 = new User(); user3.setId(12L); user3.setUsername("bob");
+
+        GamePlayer gp1 = new GamePlayer(); gp1.setGame(game); gp1.setUser(user1); gp1.setTurnOrder(0);
+        GamePlayer gp2 = new GamePlayer(); gp2.setGame(game); gp2.setUser(user2); gp2.setTurnOrder(1);
+        GamePlayer gp3 = new GamePlayer(); gp3.setGame(game); gp3.setUser(user3); gp3.setTurnOrder(2);
+
+        when(gameRepository.findByLobbyCode("ABC123")).thenReturn(Optional.of(game));
+        when(userRepository.findById(11L)).thenReturn(Optional.of(user2));
+        when(gamePlayerRepository.existsByGameAndUser(game, user2)).thenReturn(true);
+        // After deletion of gp2, remaining players are gp1 (order 0) and gp3 (order 2)
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game))
+                .thenReturn(List.of(gp1, gp3));
+
+        gameService.leaveGame("ABC123", 11L);
+
+        // gp1 should stay at 0, gp3 should be renumbered to 1
+        verify(gamePlayerRepository).save(argThat(gp ->
+                gp.getUser().getId().equals(10L) && gp.getTurnOrder().equals(0)
+        ));
+        verify(gamePlayerRepository).save(argThat(gp ->
+                gp.getUser().getId().equals(12L) && gp.getTurnOrder().equals(1)
+        ));
+    }
+
+    @Test
+    public void cleanupAbandonedGames_finishedGame_deletesGame() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("FINISHED");
+        game.setCreatedAt(Instant.now().minus(Duration.ofHours(25)));
+
+        when(gameRepository.findAll()).thenReturn(List.of(game));
+
+        gameService.cleanupAbandonedGames();
+
+        verify(chatMessageRepository).deleteAllByGameId(1L);
+        verify(gameInviteRepository).deleteAllByGameId(1L);
+        verify(gameRepository).delete(game);
+    }
+
+    @Test
+    public void cleanupAbandonedGames_oldInProgressGame_deletesGame() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+        game.setCreatedAt(Instant.now().minus(Duration.ofHours(4)));
+
+        when(gameRepository.findAll()).thenReturn(List.of(game));
+
+        gameService.cleanupAbandonedGames();
+
+        verify(chatMessageRepository).deleteAllByGameId(1L);
+        verify(gameInviteRepository).deleteAllByGameId(1L);
+        verify(gameRepository).delete(game);
+    }
+
+    @Test
+    public void cleanupAbandonedGames_recentGame_doesNotDelete() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+        game.setCreatedAt(Instant.now().minus(Duration.ofHours(1)));
+
+        when(gameRepository.findAll()).thenReturn(List.of(game));
+
+        gameService.cleanupAbandonedGames();
+
+        verify(gameRepository, never()).delete(any(Game.class));
+    }
+
+    @Test
+    public void cleanupAbandonedGames_nullCreatedAt_doesNotDelete() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+        game.setCreatedAt(null);
+
+        when(gameRepository.findAll()).thenReturn(List.of(game));
+
+        gameService.cleanupAbandonedGames();
+
         verify(gameRepository, never()).delete(any(Game.class));
     }
 }
