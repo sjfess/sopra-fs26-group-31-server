@@ -35,7 +35,7 @@ public class FriendRequestControllerTest {
     @MockitoBean
     private FriendRequestService friendRequestService;
 
-    // ── POST /friend-requests ─────────────────────────────────────────────────
+
 
     @Test
     public void sendFriendRequest_validInput_returnsCreated() throws Exception {

@@ -18,6 +18,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.server.ResponseStatusException;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 
 import java.util.List;
 
@@ -199,7 +202,7 @@ public class GameControllerTest {
         RematchRequestDTO dto = new RematchRequestDTO();
         dto.setUserId(10L);
 
-        given(gameService.createRematch(1L, 10L)).willReturn(rematch);
+        given(gameService.createRematchAndCloseOldGame(1L, 10L)).willReturn(rematch);
         given(gameService.getTimeline(2L)).willReturn(List.of());
 
         mockMvc.perform(post("/games/1/rematch")
@@ -230,7 +233,7 @@ public class GameControllerTest {
         RematchRequestDTO dto = new RematchRequestDTO();
         dto.setUserId(10L);
 
-        given(gameService.createRematch(1L, 10L))
+        given(gameService.createRematchAndCloseOldGame(1L, 10L))
                 .willThrow(new ResponseStatusException(
                         HttpStatus.CONFLICT,
                         "Rematch can only be created from a finished game"
@@ -243,17 +246,52 @@ public class GameControllerTest {
     }
 
     @Test
-    public void createRematch_requestingUserNotPlayer_returnsForbidden() throws Exception {
+    public void createRematch_nonHost_returnsForbidden() throws Exception {
         RematchRequestDTO dto = new RematchRequestDTO();
         dto.setUserId(999L);
 
-        given(gameService.createRematch(1L, 999L))
+        given(gameService.createRematchAndCloseOldGame(1L, 999L))
                 .willThrow(new ResponseStatusException(
                         HttpStatus.FORBIDDEN,
-                        "Only players from the finished game can create a rematch"
+                        "Only the host can create a rematch"
                 ));
 
         mockMvc.perform(post("/games/1/rematch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(asJsonString(dto)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    public void closeFinishedGame_validInput_returnsNoContent() throws Exception {
+        RematchRequestDTO dto = new RematchRequestDTO();
+        dto.setUserId(10L);
+
+        mockMvc.perform(delete("/games/1/close")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(asJsonString(dto)))
+                .andExpect(status().isNoContent());
+
+        verify(gameService).closeFinishedGame(1L, 10L);
+    }
+
+    @Test
+    public void closeFinishedGame_missingUserId_returnsBadRequest() throws Exception {
+        mockMvc.perform(delete("/games/1/close")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void closeFinishedGame_nonHost_returnsForbidden() throws Exception {
+        RematchRequestDTO dto = new RematchRequestDTO();
+        dto.setUserId(99L);
+
+        doThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the host can close the game"))
+                .when(gameService).closeFinishedGame(1L, 99L);
+
+        mockMvc.perform(delete("/games/1/close")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(asJsonString(dto)))
                 .andExpect(status().isForbidden());

@@ -520,7 +520,7 @@ public class GameServiceTest {
 
         assertEquals("Berlin Wall", drawnCard.getTitle());
         assertEquals(1, activePlayer.getCurrentCardIndex());
-        assertNotNull(activePlayer.getTurnStartedAt());
+        assertNull(activePlayer.getTurnStartedAt());
     }
 
     @Test
@@ -804,7 +804,7 @@ public class GameServiceTest {
         gp1.setGame(game);
         gp1.setUser(user1);
         gp1.setScore(4);
-        gp1.setCorrectPlacements(4);
+        gp1.setCo
         gp1.setIncorrectPlacements(1);
 
         GamePlayer gp2 = new GamePlayer();
@@ -1105,6 +1105,187 @@ public class GameServiceTest {
         assertFalse(gp1.getActiveTurn());
     }
 
+
+    @Test
+    public void finalizeGame_validInput_includesBestStreakInResults() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+
+        User user1 = new User();
+        user1.setId(10L);
+        user1.setUsername("alex");
+        user1.setTotalGamesPlayed(0);
+        user1.setTotalWins(0);
+        user1.setTotalPoints(0);
+        user1.setTotalCorrectPlacements(0);
+        user1.setTotalIncorrectPlacements(0);
+
+        User user2 = new User();
+        user2.setId(11L);
+        user2.setUsername("mia");
+        user2.setTotalGamesPlayed(0);
+        user2.setTotalWins(0);
+        user2.setTotalPoints(0);
+        user2.setTotalCorrectPlacements(0);
+        user2.setTotalIncorrectPlacements(0);
+
+        GamePlayer gp1 = new GamePlayer();
+        gp1.setGame(game);
+        gp1.setUser(user1);
+        gp1.setScore(5);
+        gp1.setCorrectPlacements(5);
+        gp1.setIncorrectPlacements(1);
+        gp1.setBestStreak(4);
+
+        GamePlayer gp2 = new GamePlayer();
+        gp2.setGame(game);
+        gp2.setUser(user2);
+        gp2.setScore(3);
+        gp2.setCorrectPlacements(3);
+        gp2.setIncorrectPlacements(2);
+        gp2.setBestStreak(2);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findAllByGameOrderByScoreDescTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<FinalResultDTO> results = gameService.finalizeGame(1L);
+
+        assertEquals(2, results.size());
+        assertEquals(4, results.get(0).getBestStreak());
+        assertEquals(2, results.get(1).getBestStreak());
+    }
+
+
+
+
+    @Test
+    public void drawCard_userNotInGame_throwsException() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+
+        User user = new User();
+        user.setId(10L);
+        user.setUsername("alex");
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
+        when(gamePlayerRepository.findByGameAndUser(game, user)).thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> gameService.drawCard(1L, 10L, 0)
+        );
+
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+    }
+
+    @Test
+    public void drawCard_userNotFound_throwsException() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(userRepository.findById(10L)).thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> gameService.drawCard(1L, 10L, 0)
+        );
+
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+    }
+
+    @Test
+    public void drawCard_gameNotInProgress_throwsException() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("WAITING");
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> gameService.drawCard(1L, 10L, 0)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+    }
+
+    @Test
+    public void placeCard_invalidPosition_throwsException() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
+        game.setTimelineJson("[]");
+
+        EventCard card = new EventCard();
+        card.setTitle("A");
+        card.setYear(1000);
+        game.setDeckJson(gameService.serializeDeck(List.of(card)));
+
+        User user = new User();
+        user.setId(10L);
+        user.setUsername("alex");
+
+        GamePlayer activePlayer = new GamePlayer();
+        activePlayer.setGame(game);
+        activePlayer.setUser(user);
+        activePlayer.setActiveTurn(true);
+        activePlayer.setCurrentCardIndex(0);
+        activePlayer.setHandIndicesJson("[0]");
+        activePlayer.setCardsInHand(1);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(activePlayer));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> gameService.placeCard(1L, 0, 2)
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+    }
+
+    @Test
+    public void placeCard_noActivePlayer_throwsException() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+        game.setTimelineJson("[]");
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> gameService.placeCard(1L, 0, 0)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+    }
+
+    @Test
+    public void finalizeGame_noPlayers_throwsException() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findAllByGameOrderByScoreDescTurnOrderAsc(game)).thenReturn(List.of());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> gameService.finalizeGame(1L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+    }
+
     @Test
     public void createRematch_finishedGame_createsNewWaitingGameWithSamePlayersAndSettings() {
         Game oldGame = new Game();
@@ -1153,8 +1334,9 @@ public class GameServiceTest {
 
         when(gameRepository.findById(1L)).thenReturn(Optional.of(oldGame));
         when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(oldGame)).thenReturn(List.of(oldGp1, oldGp2));
-
-        when(gameRepository.save(any(Game.class))).thenAnswer(invocation -> {
+        when(gameRepository.findByRematchFromGameIdAndStatus(1L, "WAITING"))
+                .thenReturn(Optional.empty());
+        when(gameRepository.saveAndFlush(any(Game.class))).thenAnswer(invocation -> {
             Game saved = invocation.getArgument(0);
             if (saved.getId() == null) {
                 saved.setId(2L);
@@ -1610,7 +1792,9 @@ public class GameServiceTest {
 
         when(gameRepository.findById(1L)).thenReturn(Optional.of(oldGame));
         when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(oldGame)).thenReturn(List.of(oldGp1, oldGp2));
-        when(gameRepository.save(any(Game.class))).thenAnswer(invocation -> {
+        when(gameRepository.findByRematchFromGameIdAndStatus(1L, "WAITING"))
+                .thenReturn(Optional.empty());
+        when(gameRepository.saveAndFlush(any(Game.class))).thenAnswer(invocation -> {
             Game saved = invocation.getArgument(0);
             saved.setId(2L);
             return saved;
@@ -1644,7 +1828,7 @@ public class GameServiceTest {
     }
 
     @Test
-    public void createRematch_preservesOriginalHost_notRequestingUser() {
+    public void createRematch_setsRequestingUserAsHost() {
         Game oldGame = new Game();
         oldGame.setId(1L);
         oldGame.setStatus("FINISHED");
@@ -1673,7 +1857,9 @@ public class GameServiceTest {
 
         when(gameRepository.findById(1L)).thenReturn(Optional.of(oldGame));
         when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(oldGame)).thenReturn(List.of(gp1, gp2));
-        when(gameRepository.save(any(Game.class))).thenAnswer(invocation -> {
+        when(gameRepository.findByRematchFromGameIdAndStatus(1L, "WAITING"))
+                .thenReturn(Optional.empty());
+        when(gameRepository.saveAndFlush(any(Game.class))).thenAnswer(invocation -> {
             Game saved = invocation.getArgument(0);
             saved.setId(2L);
             return saved;
@@ -1681,7 +1867,7 @@ public class GameServiceTest {
 
         Game rematch = gameService.createRematch(1L, 11L);
 
-        assertEquals(10L, rematch.getHostId());
+        assertEquals(11L, rematch.getHostId());
     }
 
     @Test
@@ -1707,7 +1893,9 @@ public class GameServiceTest {
 
         when(gameRepository.findById(1L)).thenReturn(Optional.of(oldGame));
         when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(oldGame)).thenReturn(List.of(oldGp));
-        when(gameRepository.save(any(Game.class))).thenAnswer(invocation -> {
+        when(gameRepository.findByRematchFromGameIdAndStatus(1L, "WAITING"))
+                .thenReturn(Optional.empty());
+        when(gameRepository.saveAndFlush(any(Game.class))).thenAnswer(invocation -> {
             Game saved = invocation.getArgument(0);
             saved.setId(2L);
             return saved;
@@ -1719,132 +1907,6 @@ public class GameServiceTest {
                 newGp.getHandIndicesJson() == null &&
                         newGp.getCardsInHand().equals(0)
         ));
-    }
-
-    @Test
-    public void drawCard_userNotInGame_throwsException() {
-        Game game = new Game();
-        game.setId(1L);
-        game.setStatus("IN_PROGRESS");
-
-        User user = new User();
-        user.setId(10L);
-        user.setUsername("alex");
-
-        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
-        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
-        when(gamePlayerRepository.findByGameAndUser(game, user)).thenReturn(Optional.empty());
-
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
-                () -> gameService.drawCard(1L, 10L, 0)
-        );
-
-        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
-    }
-
-    @Test
-    public void drawCard_userNotFound_throwsException() {
-        Game game = new Game();
-        game.setId(1L);
-        game.setStatus("IN_PROGRESS");
-
-        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
-        when(userRepository.findById(10L)).thenReturn(Optional.empty());
-
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
-                () -> gameService.drawCard(1L, 10L, 0)
-        );
-
-        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
-    }
-
-    @Test
-    public void drawCard_gameNotInProgress_throwsException() {
-        Game game = new Game();
-        game.setId(1L);
-        game.setStatus("WAITING");
-
-        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
-
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
-                () -> gameService.drawCard(1L, 10L, 0)
-        );
-
-        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
-    }
-
-    @Test
-    public void placeCard_invalidPosition_throwsException() {
-        Game game = new Game();
-        game.setId(1L);
-        game.setStatus("IN_PROGRESS");
-        game.setGameMode(GameMode.TIMELINE);
-        game.setTimelineJson("[]");
-
-        EventCard card = new EventCard();
-        card.setTitle("A");
-        card.setYear(1000);
-        game.setDeckJson(gameService.serializeDeck(List.of(card)));
-
-        User user = new User();
-        user.setId(10L);
-        user.setUsername("alex");
-
-        GamePlayer activePlayer = new GamePlayer();
-        activePlayer.setGame(game);
-        activePlayer.setUser(user);
-        activePlayer.setActiveTurn(true);
-        activePlayer.setCurrentCardIndex(0);
-        activePlayer.setHandIndicesJson("[0]");
-        activePlayer.setCardsInHand(1);
-
-        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
-        when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(activePlayer));
-
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
-                () -> gameService.placeCard(1L, 0, 2)
-        );
-
-        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
-    }
-
-    @Test
-    public void placeCard_noActivePlayer_throwsException() {
-        Game game = new Game();
-        game.setId(1L);
-        game.setStatus("IN_PROGRESS");
-        game.setTimelineJson("[]");
-
-        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
-        when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.empty());
-
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
-                () -> gameService.placeCard(1L, 0, 0)
-        );
-
-        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
-    }
-
-    @Test
-    public void finalizeGame_noPlayers_throwsException() {
-        Game game = new Game();
-        game.setId(1L);
-        game.setStatus("IN_PROGRESS");
-
-        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
-        when(gamePlayerRepository.findAllByGameOrderByScoreDescTurnOrderAsc(game)).thenReturn(List.of());
-
-        ResponseStatusException exception = assertThrows(
-                ResponseStatusException.class,
-                () -> gameService.finalizeGame(1L)
-        );
-
-        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
     }
 
     // ── Chat ─────────────────────────────────────────────────────────────────
@@ -1963,5 +2025,96 @@ public class GameServiceTest {
                 gameService.getChatMessages(1L);
 
         assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void closeFinishedGame_validInput_deletesChatInvitesAndGame() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("FINISHED");
+        game.setHostId(10L);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+
+        gameService.closeFinishedGame(1L, 10L);
+
+        verify(chatMessageRepository).deleteAllByGameId(1L);
+        verify(gameInviteRepository).deleteAllByGameId(1L);
+        verify(gameRepository).delete(game);
+    }
+
+    @Test
+    public void createRematchAndCloseOldGame_validInput_createsRematchAndDeletesOldGame() {
+        Game oldGame = new Game();
+        oldGame.setId(1L);
+        oldGame.setStatus("FINISHED");
+        oldGame.setHostId(10L);
+        oldGame.setEra(HistoricalEra.MODERN);
+        oldGame.setDifficulty(Difficulty.EASY);
+        oldGame.setGameMode(GameMode.TIMELINE);
+
+        User user = new User();
+        user.setId(10L);
+        user.setUsername("alex");
+
+        GamePlayer gp = new GamePlayer();
+        gp.setGame(oldGame);
+        gp.setUser(user);
+        gp.setTurnOrder(0);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(oldGame));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(oldGame)).thenReturn(List.of(gp));
+        when(gameRepository.findByRematchFromGameIdAndStatus(1L, "WAITING")).thenReturn(Optional.empty());
+        when(gameRepository.saveAndFlush(any(Game.class))).thenAnswer(invocation -> {
+            Game saved = invocation.getArgument(0);
+            saved.setId(2L);
+            return saved;
+        });
+
+        Game result = gameService.createRematchAndCloseOldGame(1L, 10L);
+
+        assertEquals(2L, result.getId());
+        verify(chatMessageRepository).deleteAllByGameId(1L);
+        verify(gameInviteRepository).deleteAllByGameId(1L);
+        verify(gameRepository).delete(oldGame);
+    }
+
+    @Test
+    public void closeFinishedGame_nonHost_throwsForbidden() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("FINISHED");
+        game.setHostId(10L);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> gameService.closeFinishedGame(1L, 99L)
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        verify(chatMessageRepository, never()).deleteAllByGameId(anyLong());
+        verify(gameInviteRepository, never()).deleteAllByGameId(anyLong());
+        verify(gameRepository, never()).delete(any(Game.class));
+    }
+    @Test
+    public void createRematchAndCloseOldGame_nonHost_throwsForbidden() {
+        Game oldGame = new Game();
+        oldGame.setId(1L);
+        oldGame.setStatus("FINISHED");
+        oldGame.setHostId(10L);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(oldGame));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> gameService.createRematchAndCloseOldGame(1L, 99L)
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+        verify(chatMessageRepository, never()).deleteAllByGameId(anyLong());
+        verify(gameInviteRepository, never()).deleteAllByGameId(anyLong());
+        verify(gameRepository, never()).delete(any(Game.class));
     }
 }

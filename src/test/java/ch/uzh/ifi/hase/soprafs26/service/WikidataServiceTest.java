@@ -14,6 +14,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import org.mockito.Mockito;
 
 @ExtendWith(MockitoExtension.class)
 class WikidataServiceTest {
@@ -395,5 +396,60 @@ class WikidataServiceTest {
                 "extractValue", String.class, String.class);
         m.setAccessible(true);
         return (String) m.invoke(wikidataService, block, fieldName);
+    }
+
+    @Test
+    void fetchEvents_ancientEra_returnsCards() {
+        WikidataService spy = Mockito.spy(new WikidataService());
+        EventCard c = new EventCard();
+        c.setTitle("Construction of the Parthenon");
+        c.setYear(-447);
+
+        doReturn(List.of(c)).when(spy).runSparql(anyString());
+
+        List<EventCard> result = spy.fetchEvents(HistoricalEra.ANCIENT, 5);
+
+        assertNotNull(result);
+        assertTrue(result.size() <= 5);
+    }
+
+    @Test
+    void fetchEvents_medievalEra_returnsCards() {
+        WikidataService spy = Mockito.spy(new WikidataService());
+        EventCard c = new EventCard();
+        c.setTitle("Signing of the Magna Carta");
+        c.setYear(1215);
+
+        doReturn(List.of(c)).when(spy).runSparql(anyString());
+
+        List<EventCard> result = spy.fetchEvents(HistoricalEra.MEDIEVAL, 5);
+
+        assertNotNull(result);
+    }
+
+    @Test
+    void fetchEvents_modernEra_returnsCards() {
+        WikidataService spy = Mockito.spy(new WikidataService());
+        EventCard c = new EventCard();
+        c.setTitle("Birth of Napoleon Bonaparte");
+        c.setYear(1769);
+
+        doReturn(List.of(c)).when(spy).runSparql(anyString());
+
+        List<EventCard> result = spy.fetchEvents(HistoricalEra.MODERN, 10);
+
+        assertNotNull(result);
+        assertTrue(result.size() <= 10);
+    }
+
+    @Test
+    void fetchEvents_runSparqlThrows_stillReturnsResult() {
+        WikidataService spy = Mockito.spy(new WikidataService());
+
+        doThrow(new RuntimeException("Network error")).when(spy).runSparql(anyString());
+
+        List<EventCard> result = spy.fetchEvents(HistoricalEra.INFORMATION, 5);
+
+        assertNotNull(result);
     }
 }

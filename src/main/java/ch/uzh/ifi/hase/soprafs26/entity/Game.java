@@ -31,7 +31,7 @@ public class Game implements Serializable {
     @Column
     private GameMode gameMode;
 
-    @Column
+    @Column(unique = true)
     private Long rematchFromGameId;
 
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)

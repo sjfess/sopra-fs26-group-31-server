@@ -123,4 +123,27 @@ public class UserServiceIntegrationTest {
         assertEquals("newUsername", updatedUser.getUsername());
         assertEquals("new bio", updatedUser.getBio());
     }
+
+    @Test
+    public void getUserById_notFound_throwsException() {
+        assertThrows(ResponseStatusException.class, () -> userService.getUserById(999L));
+    }
+
+    @Test
+    public void updateUserProfile_wrongToken_throwsException() {
+        User user = new User();
+        user.setUsername("user1");
+        user.setPassword("hashed");
+        user.setSalt("salt");
+        user.setToken("correct-token");
+        user.setStatus(UserStatus.ONLINE);
+        user.setBio("bio");
+        user.setCreationDate(Instant.now());
+        User saved = userRepository.saveAndFlush(user);
+
+        assertThrows(ResponseStatusException.class, () ->
+                userService.updateUserProfile("wrong-token", saved.getId(), "newName", "new bio"));
+    }
+
+
 }
