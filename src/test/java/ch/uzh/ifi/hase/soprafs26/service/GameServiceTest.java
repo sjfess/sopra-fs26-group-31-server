@@ -1990,7 +1990,7 @@ public class GameServiceTest {
     }
 
     @Test
-    public void createRematchAndCloseOldGame_validInput_createsRematchAndDeletesOldGame() {
+    public void createRematchAndCloseOldGame_validInput_createsRematchAndKeepsOldGame() {
         Game oldGame = new Game();
         oldGame.setId(1L);
         oldGame.setStatus("FINISHED");
@@ -2020,9 +2020,9 @@ public class GameServiceTest {
         Game result = gameService.createRematchAndCloseOldGame(1L, 10L);
 
         assertEquals(2L, result.getId());
-        verify(chatMessageRepository).deleteAllByGameId(1L);
-        verify(gameInviteRepository).deleteAllByGameId(1L);
-        verify(gameRepository).delete(oldGame);
+        verify(chatMessageRepository, never()).deleteAllByGameId(anyLong());
+        verify(gameInviteRepository, never()).deleteAllByGameId(anyLong());
+        verify(gameRepository, never()).delete(any(Game.class));
     }
 
     @Test

@@ -14,6 +14,7 @@ public class GameGetDTO {
     private int deckSize;
     private int cardsRemaining;
     private Long hostId;
+    private Long rematchGameId;
     private List<PlayerSummaryDTO> players;
     private int timelineSize;
     private Difficulty difficulty;
@@ -43,6 +44,9 @@ public class GameGetDTO {
 
     public Long getHostId() { return hostId; }
     public void setHostId(Long hostId) { this.hostId = hostId; }
+
+    public Long getRematchGameId() { return rematchGameId; }
+    public void setRematchGameId(Long rematchGameId) { this.rematchGameId = rematchGameId; }
 
     public List<PlayerSummaryDTO> getPlayers() { return players; }
     public void setPlayers(List<PlayerSummaryDTO> players) { this.players = players; }
