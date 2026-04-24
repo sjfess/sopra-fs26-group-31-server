@@ -34,6 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import ch.uzh.ifi.hase.soprafs26.rest.dto.RematchRequestDTO;
 import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
 import ch.uzh.ifi.hase.soprafs26.constant.GameMode;
+import java.util.Optional;
 
 @WebMvcTest(GameController.class)
 public class GameControllerTest {
@@ -93,6 +94,7 @@ public class GameControllerTest {
 
         given(gameService.joinGame("ABC123", 10L)).willReturn(game);
         given(gameService.getTimeline(1L)).willReturn(List.of());
+        given(gameService.findWaitingRematchId(1L)).willReturn(Optional.empty());
 
         mockMvc.perform(post("/games/join/ABC123")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -105,6 +107,27 @@ public class GameControllerTest {
                 .andExpect(jsonPath("$.deckSize", is(0)))
                 .andExpect(jsonPath("$.cardsRemaining", is(0)))
                 .andExpect(jsonPath("$.timelineSize", is(0)));
+    }
+
+    @Test
+    public void getGame_withWaitingRematch_returnsRematchGameId() throws Exception {
+        Game game = new Game();
+        game.setId(1L);
+        game.setLobbyCode("ABC123");
+        game.setEra(HistoricalEra.MODERN);
+        game.setStatus("FINISHED");
+        game.setDeckSize(0);
+        game.setNextCardIndex(0);
+        game.setTimelineJson("[]");
+
+        given(gameService.getGame(1L)).willReturn(game);
+        given(gameService.getTimeline(1L)).willReturn(List.of());
+        given(gameService.findWaitingRematchId(1L)).willReturn(Optional.of(2L));
+
+        mockMvc.perform(get("/games/1").contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id", is(1)))
+                .andExpect(jsonPath("$.rematchGameId", is(2)));
     }
 
     @Test
@@ -204,6 +227,7 @@ public class GameControllerTest {
 
         given(gameService.createRematchAndCloseOldGame(1L, 10L)).willReturn(rematch);
         given(gameService.getTimeline(2L)).willReturn(List.of());
+        given(gameService.findWaitingRematchId(2L)).willReturn(Optional.empty());
 
         mockMvc.perform(post("/games/1/rematch")
                         .contentType(MediaType.APPLICATION_JSON)

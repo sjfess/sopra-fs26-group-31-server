@@ -83,6 +83,7 @@ public interface DTOMapper {
     @Mapping(source = "deckSize", target = "deckSize")
     @Mapping(source = "hostId", target = "hostId")
     @Mapping(target = "cardsRemaining", ignore = true)
+    @Mapping(target = "rematchGameId", ignore = true)
     @Mapping(source = "gamePlayers", target = "players")
     @Mapping(target = "timelineSize", ignore = true)
     @Mapping(source = "maxPlayers", target = "maxPlayers")
