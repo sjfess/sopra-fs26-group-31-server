@@ -262,9 +262,9 @@ public class GameServiceTest {
         when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(gp1));
         when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
 
-        Object[] result = gameService.placeCard(1L, 0, 0);
+        GameService.PlacementResult result = gameService.placeCard(1L, 0, 0);
 
-        assertTrue((Boolean) result[1]);
+        assertTrue(result.correct());
         assertEquals(160, gp1.getScore());
         assertEquals(1, gp1.getCorrectStreak());
         assertEquals(1, gp1.getBestStreak());
@@ -338,9 +338,9 @@ public class GameServiceTest {
         when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(gp1));
         when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
 
-        Object[] result = gameService.placeCard(1L, 0, 0);
+        GameService.PlacementResult result = gameService.placeCard(1L, 0, 0);
 
-        assertFalse((Boolean) result[1]);
+        assertFalse(result.correct());
         assertEquals(2, gp1.getScore());
         assertEquals(0, gp1.getCorrectStreak());
         assertEquals(3, gp1.getBestStreak());
@@ -933,9 +933,9 @@ public class GameServiceTest {
         when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(gp1));
         when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
 
-        Object[] result = gameService.placeCard(1L, 1, 0);
+        GameService.PlacementResult result = gameService.placeCard(1L, 1, 0);
 
-        assertTrue((Boolean) result[1]);
+        assertTrue(result.correct());
         assertEquals(220, gp1.getScore());
         assertEquals(2, gp1.getCorrectStreak());
         assertEquals(2, gp1.getBestStreak());
@@ -1098,9 +1098,9 @@ public class GameServiceTest {
         when(gamePlayerRepository.findAllByGameOrderByScoreDescTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Object[] result = gameService.placeCard(1L, 0, 0);
+        GameService.PlacementResult result = gameService.placeCard(1L, 0, 0);
 
-        assertTrue((Boolean) result[1]);
+        assertTrue(result.correct());
         assertEquals("FINISHED", game.getStatus());
         assertEquals(0, gp1.getCardsInHand());
         assertFalse(gp1.getActiveTurn());
@@ -1990,7 +1990,7 @@ public class GameServiceTest {
     }
 
     @Test
-    public void createRematchAndCloseOldGame_validInput_createsRematchAndKeepsOldGame() {
+    public void createRematchAndCloseOldGame_validInput_createsRematchAndClosesOldGame() {
         Game oldGame = new Game();
         oldGame.setId(1L);
         oldGame.setStatus("FINISHED");
@@ -2020,9 +2020,9 @@ public class GameServiceTest {
         Game result = gameService.createRematchAndCloseOldGame(1L, 10L);
 
         assertEquals(2L, result.getId());
-        verify(chatMessageRepository, never()).deleteAllByGameId(anyLong());
-        verify(gameInviteRepository, never()).deleteAllByGameId(anyLong());
-        verify(gameRepository, never()).delete(any(Game.class));
+        verify(chatMessageRepository).deleteAllByGameId(1L);
+        verify(gameInviteRepository).deleteAllByGameId(1L);
+        verify(gameRepository).delete(oldGame);
     }
 
     @Test
