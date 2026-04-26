@@ -211,6 +211,7 @@ public class GameController {
         dto.setCardsRemaining(game.getDeckSize() - game.getNextCardIndex());
         List<EventCard> timeline = gameService.getTimeline(game.getId());
         dto.setTimelineSize(timeline.size());
+        dto.setRematchGameId(gameService.findWaitingRematchId(game.getId()).orElse(null));
         return dto;
     }
 
@@ -244,7 +245,20 @@ public class GameController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId is required");
         }
 
-        Game rematch = gameService.createRematch(gameId, rematchRequestDTO.getUserId());
+        Game rematch = gameService.createRematchAndCloseOldGame(gameId, rematchRequestDTO.getUserId());
         return toGameGetDTO(rematch);
+    }
+
+    @DeleteMapping("/games/{gameId}/close")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void closeFinishedGame(
+            @PathVariable Long gameId,
+            @RequestBody RematchRequestDTO requestDTO) {
+
+        if (requestDTO == null || requestDTO.getUserId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId is required");
+        }
+
+        gameService.closeFinishedGame(gameId, requestDTO.getUserId());
     }
 }

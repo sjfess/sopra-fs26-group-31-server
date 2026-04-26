@@ -177,4 +177,118 @@ public class UserServiceTest {
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
     }
+
+    @Test
+    public void createUser_nullFields_defaultsApplied() {
+        User newUser = new User();
+        newUser.setUsername("newUser");
+        newUser.setPassword("pw");
+        newUser.setBio(null);              // → soll "" werden
+        newUser.setTotalGamesPlayed(null); // → soll 0 werden
+        newUser.setTotalWins(null);        // → soll 0 werden
+        newUser.setTotalPoints(null);      // → soll 0 werden
+
+        when(userRepository.findByUsername("newUser")).thenReturn(null);
+
+        User result = userService.createUser(newUser);
+
+        assertEquals("", result.getBio());
+        assertEquals(0, result.getTotalGamesPlayed());
+        assertEquals(0, result.getTotalWins());
+        assertEquals(0, result.getTotalPoints());
+    }
+
+    @Test
+    public void updateUserProfile_blankUsername_usernameNotUpdated() {
+        User requester = new User();
+        requester.setId(1L);
+        requester.setToken("valid-token");
+        requester.setUsername("oldUsername");
+        requester.setPassword("pw");
+        requester.setStatus(UserStatus.ONLINE);
+        requester.setBio("bio");
+        requester.setCreationDate(Instant.now());
+
+        when(userRepository.findByToken("valid-token")).thenReturn(requester);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(requester));
+
+        userService.updateUserProfile("valid-token", 1L, "  ", "new bio");
+
+        // Username bleibt unverändert
+        assertEquals("oldUsername", requester.getUsername());
+        assertEquals("new bio", requester.getBio());
+    }
+
+    @Test
+    public void updateUserProfile_nullUsername_usernameNotUpdated() {
+        User requester = new User();
+        requester.setId(1L);
+        requester.setToken("valid-token");
+        requester.setUsername("oldUsername");
+        requester.setPassword("pw");
+        requester.setStatus(UserStatus.ONLINE);
+        requester.setBio("bio");
+        requester.setCreationDate(Instant.now());
+
+        when(userRepository.findByToken("valid-token")).thenReturn(requester);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(requester));
+
+        userService.updateUserProfile("valid-token", 1L, null, "new bio");
+
+        assertEquals("oldUsername", requester.getUsername());
+        assertEquals("new bio", requester.getBio());
+    }
+
+    @Test
+    public void getFriends_validUser_returnsFriendList() {
+        User friend = new User();
+        friend.setId(2L);
+        friend.setUsername("bob");
+
+        testUser.setFriends(new java.util.HashSet<>(java.util.List.of(friend)));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
+
+        java.util.List<User> friends = userService.getFriends(1L);
+
+        assertEquals(1, friends.size());
+        assertTrue(friends.contains(friend));
+    }
+
+    @Test
+    public void removeFriend_validInput_removesBothSides() {
+        User friend = new User();
+        friend.setId(2L);
+        friend.setUsername("bob");
+        friend.setFriends(new java.util.HashSet<>());
+
+        testUser.setFriends(new java.util.HashSet<>(java.util.List.of(friend)));
+        friend.getFriends().add(testUser);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(friend));
+
+        userService.removeFriend(1L, 2L);
+
+        assertFalse(testUser.getFriends().contains(friend));
+        assertFalse(friend.getFriends().contains(testUser));
+        verify(userRepository, times(1)).save(testUser);
+        verify(userRepository, times(1)).save(friend);
+    }
+
+    @Test
+    public void removeFriend_notFriends_throwsNotFound() {
+        User stranger = new User();
+        stranger.setId(2L);
+        stranger.setFriends(new java.util.HashSet<>());
+        testUser.setFriends(new java.util.HashSet<>());
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(stranger));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> userService.removeFriend(1L, 2L)
+        );
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+    }
 }

@@ -16,7 +16,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DataJpaTest
-public class GamePlayerRepositoryIntegrationTest {
+public class GamePlayerRepositoryUnitTest {
 
     @Autowired
     private GameRepository gameRepository;

@@ -10,4 +10,5 @@ import java.util.Optional;
 public interface GameRepository extends JpaRepository<Game, Long> {
 
     Optional<Game> findByLobbyCode(String lobbyCode);
+    Optional<Game> findByRematchFromGameIdAndStatus(Long rematchFromGameId, String status);
 }
