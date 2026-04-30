@@ -245,7 +245,7 @@ public class GameController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId is required");
         }
 
-        Game rematch = gameService.createRematchAndCloseOldGame(gameId, rematchRequestDTO.getUserId());
+        Game rematch = gameService.createRematch(gameId, rematchRequestDTO.getUserId());
         return toGameGetDTO(rematch);
     }
 

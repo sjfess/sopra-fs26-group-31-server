@@ -1,6 +1,7 @@
 package ch.uzh.ifi.hase.soprafs26.service;
 
 
+import ch.uzh.ifi.hase.soprafs26.constant.UserStatus;
 import ch.uzh.ifi.hase.soprafs26.entity.EventCard;
 import ch.uzh.ifi.hase.soprafs26.entity.Game;
 import ch.uzh.ifi.hase.soprafs26.entity.GamePlayer;
@@ -91,7 +92,8 @@ public class GameService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "User with id " + userId + " was not found"));
-
+        user.setStatus(UserStatus.IN_GAME);
+        userRepository.save(user);
         Game game = new Game();
         game.setLobbyCode(generateUniqueLobbyCode());
         game.setEra(era);
@@ -144,6 +146,8 @@ public class GameService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "User is already part of this game");
         }
+        user.setStatus(UserStatus.IN_GAME);
+        userRepository.save(user);
 
         List<GamePlayer> existingPlayers = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
 
@@ -227,6 +231,10 @@ public class GameService {
             newGp.setCorrectStreak(0);
             newGp.setBestStreak(0);
             newGp.setTurnStartedAt(null);
+
+            User user = oldGp.getUser();
+            user.setStatus(UserStatus.IN_GAME);
+            userRepository.save(user);
 
             gamePlayerRepository.save(newGp);
         }
@@ -879,7 +887,8 @@ public class GameService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND,
                     "User is not part of this game");
         }
-
+        user.setStatus(UserStatus.ONLINE);
+        userRepository.save(user);
         gamePlayerRepository.deleteByGameAndUser(game, user);
 
         List<GamePlayer> remaining =
@@ -1040,7 +1049,7 @@ public class GameService {
             if (winner) {
                 user.setTotalWins(user.getTotalWins() + 1);
             }
-
+            user.setStatus(UserStatus.ONLINE);
             userRepository.save(user);
 
             FinalResultDTO dto = new FinalResultDTO();
@@ -1122,6 +1131,11 @@ public class GameService {
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND, "User " + toUsername + " not found");
         }
+        if (toUser.getStatus() == UserStatus.IN_GAME) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "User is currently in a game and cannot receive invites");
+        }
+
         if (fromUser.getUsername().equalsIgnoreCase(toUser.getUsername())) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "You cannot invite yourself");
@@ -1172,6 +1186,12 @@ public class GameService {
         for (Game game : gameRepository.findAll()) {
             if ("FINISHED".equals(game.getStatus()) ||
                     (game.getCreatedAt() != null && game.getCreatedAt().isBefore(cutoff))) {
+                List<GamePlayer> players = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
+                for (GamePlayer gp : players) {
+                    User u = gp.getUser();
+                    u.setStatus(UserStatus.ONLINE);
+                    userRepository.save(u);
+                }
                 deleteFinishedGameInternal(game);
             }
         }
