@@ -101,7 +101,7 @@ public class GameServiceTest {
         gp2.setActiveTurn(false);
 
         List<EventCard> deck = new java.util.ArrayList<>();
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 20; i++) {
             EventCard card = new EventCard();
             card.setTitle("Event " + i);
             card.setYear(1900 + i);
@@ -111,12 +111,11 @@ public class GameServiceTest {
         when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
         when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
         when(wikidataService.getCuratedCards(any())).thenReturn(Collections.emptyList());
-        when(wikidataService.fetchEvents(HistoricalEra.MODERN, 10)).thenReturn(deck);
-
+        when(wikidataService.fetchEvents(HistoricalEra.MODERN, 20)).thenReturn(deck);
         Game startedGame = gameService.startGame(1L, 10);
 
         assertEquals("IN_PROGRESS", startedGame.getStatus());
-        assertEquals(10, startedGame.getDeckSize());
+        assertEquals(20, startedGame.getDeckSize());
         assertEquals(10, startedGame.getNextCardIndex());
         assertNotNull(startedGame.getDeckJson());
 
@@ -489,6 +488,7 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
 
         EventCard card0 = new EventCard();
         card0.setTitle("Moon Landing");
@@ -529,6 +529,7 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
 
         EventCard c1 = new EventCard();
         c1.setTitle("A");
@@ -567,6 +568,7 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
         game.setTimelineJson("[]");
 
         EventCard card1 = new EventCard();
@@ -608,6 +610,7 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
         game.setTimelineJson("[]");
 
         EventCard card = new EventCard();
@@ -997,6 +1000,7 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
 
         EventCard card0 = new EventCard();
         card0.setTitle("A");
@@ -1111,6 +1115,7 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
 
         User user = new User();
         user.setId(10L);
@@ -1133,6 +1138,7 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
 
         when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
         when(userRepository.findById(10L)).thenReturn(Optional.empty());
@@ -1202,6 +1208,7 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
         game.setTimelineJson("[]");
 
         when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
@@ -2157,4 +2164,123 @@ public class GameServiceTest {
 
         verify(gameRepository, never()).delete(any(Game.class));
     }
+
+    @Test
+    public void startGame_requestedDeckTooSmall_generatesDeckBasedOnPlayerCount() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setEra(HistoricalEra.RENAISSANCE);
+        game.setDifficulty(Difficulty.EASY);
+        game.setStatus("WAITING");
+        game.setTimelineJson("[]");
+        game.setGameMode(GameMode.TIMELINE);
+
+        List<GamePlayer> players = new ArrayList<>();
+
+        for (int i = 0; i < 4; i++) {
+            User user = new User();
+            user.setId(10L + i);
+            user.setUsername("player" + i);
+
+            GamePlayer gp = new GamePlayer();
+            gp.setId(100L + i);
+            gp.setGame(game);
+            gp.setUser(user);
+            gp.setTurnOrder(i);
+            gp.setScore(0);
+            gp.setActiveTurn(false);
+
+            players.add(gp);
+        }
+
+        List<EventCard> deck = new ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            EventCard card = new EventCard();
+            card.setTitle("Renaissance Event " + i);
+            card.setYear(1400 + i);
+            deck.add(card);
+        }
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(players);
+        when(wikidataService.getCuratedCards(any())).thenReturn(Collections.emptyList());
+        when(wikidataService.fetchEvents(HistoricalEra.RENAISSANCE, 41)).thenReturn(deck);
+
+        Game startedGame = gameService.startGame(1L, 10);
+
+        assertEquals("IN_PROGRESS", startedGame.getStatus());
+        assertEquals(40, startedGame.getDeckSize());
+        assertEquals(20, startedGame.getNextCardIndex());
+
+        for (GamePlayer player : players) {
+            assertEquals(5, player.getCardsInHand());
+        }
+
+        verify(wikidataService).fetchEvents(HistoricalEra.RENAISSANCE, 41);
+    }
+
+    @Test
+    public void startGame_whenWikidataReturnsTooFewCards_fillsDeckWithCuratedCards() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setEra(HistoricalEra.MODERN);
+        game.setDifficulty(Difficulty.EASY);
+        game.setStatus("WAITING");
+        game.setTimelineJson("[]");
+        game.setGameMode(GameMode.TIMELINE);
+
+        User user1 = new User();
+        user1.setId(10L);
+        user1.setUsername("alex");
+
+        User user2 = new User();
+        user2.setId(11L);
+        user2.setUsername("mia");
+
+        GamePlayer gp1 = new GamePlayer();
+        gp1.setId(100L);
+        gp1.setGame(game);
+        gp1.setUser(user1);
+        gp1.setTurnOrder(0);
+        gp1.setScore(0);
+        gp1.setActiveTurn(false);
+
+        GamePlayer gp2 = new GamePlayer();
+        gp2.setId(101L);
+        gp2.setGame(game);
+        gp2.setUser(user2);
+        gp2.setTurnOrder(1);
+        gp2.setScore(0);
+        gp2.setActiveTurn(false);
+
+        List<EventCard> wikidataCards = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            wikidataCards.add(makeCard("Wikidata Event " + i, 1700 + i));
+        }
+
+        List<EventCard> curatedCards = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            curatedCards.add(makeCard("Curated Event " + i, 1800 + i));
+        }
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
+        when(wikidataService.getCuratedCards(any())).thenReturn(curatedCards);
+        when(wikidataService.fetchEvents(HistoricalEra.MODERN, 21)).thenReturn(wikidataCards);
+
+        Game startedGame = gameService.startGame(1L, 10);
+
+        List<EventCard> finalDeck = gameService.deserializeDeck(startedGame.getDeckJson());
+        List<EventCard> timeline = gameService.deserializeDeck(startedGame.getTimelineJson());
+
+        assertEquals("IN_PROGRESS", startedGame.getStatus());
+        assertEquals(20, startedGame.getDeckSize());
+        assertEquals(10, startedGame.getNextCardIndex());
+        assertEquals(1, timeline.size());
+        assertEquals(20, finalDeck.size());
+
+        assertTrue(finalDeck.stream().anyMatch(card -> card.getTitle().startsWith("Wikidata Event")));
+        assertTrue(finalDeck.stream().anyMatch(card -> card.getTitle().startsWith("Curated Event")));
+    }
+
 }
