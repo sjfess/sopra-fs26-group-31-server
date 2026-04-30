@@ -137,6 +137,11 @@ public class GameService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Cannot join a game that is already " + game.getStatus());
         }
+        List<GamePlayer> existingPlayers = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
+        if (existingPlayers.size() >= 8) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Lobby is full (maximum 8 players)");
+        }
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -149,7 +154,7 @@ public class GameService {
         user.setStatus(UserStatus.IN_GAME);
         userRepository.save(user);
 
-        List<GamePlayer> existingPlayers = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
+
 
         GamePlayer gamePlayer = new GamePlayer();
         gamePlayer.setGame(game);
@@ -349,7 +354,6 @@ public class GameService {
         log.info("Game {} seeded timeline with {} curated cards (difficulty: {})",
                 gameId, timelineSeedCards.size(), game.getDifficulty());
 
-        int cardsPerPlayer = INITIAL_HAND_SIZE;
         for (int i = 0; i < gamePlayers.size(); i++) {
             GamePlayer gp = gamePlayers.get(i);
             gp.setScore(0);
@@ -357,7 +361,7 @@ public class GameService {
             gp.setBestStreak(0);
             gp.setHandIndicesJson("[]");
             gp.setTurnStartedAt(null);
-            dealCardsToPlayer(gp, game, cardsPerPlayer);
+            dealCardsToPlayer(gp, game, INITIAL_HAND_SIZE);
             if (i == 0) {
                 gp.setActiveTurn(true);
                 gp.setTurnStartedAt(Instant.now());
