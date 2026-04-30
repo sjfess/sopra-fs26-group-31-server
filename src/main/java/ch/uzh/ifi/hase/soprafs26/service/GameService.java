@@ -46,6 +46,8 @@ import java.util.Set;
 @Service
 public class GameService {
 
+    public record PlacementResult(EventCard card, boolean correct, int timelineSize) {}
+
     private static final Logger log = LoggerFactory.getLogger(GameService.class);
 
     private final GameRepository gameRepository;
@@ -249,6 +251,7 @@ public class GameService {
         }
 
         Game newGame = createRematch(finishedGameId, requestingUserId);
+        deleteFinishedGameInternal(oldGame);
         return newGame;
     }
 
@@ -436,7 +439,7 @@ public class GameService {
     /**
      * Places the active player's currently drawn card at the chosen timeline position.
      */
-    public Object[] placeCard(Long gameId, int cardIndex, int position) {
+    public PlacementResult placeCard(Long gameId, int cardIndex, int position) {
         Game game = findGameOrThrow(gameId);
         assertInProgress(game);
 
@@ -550,7 +553,7 @@ public class GameService {
                 position,
                 correct ? "CORRECT" : "WRONG");
 
-        return new Object[]{card, correct, timeline.size()};
+        return new PlacementResult(card, correct, timeline.size());
     }
 
     public List<EventCard> getTimeline(Long gameId) {
@@ -904,8 +907,6 @@ public class GameService {
 
     @Scheduled(fixedDelay = 5000) // runs every 5 seconds
     public void checkTurnTimeouts() {
-        long turnLimitSeconds = TURN_LIMIT_SECONDS; // configure as needed
-
         List<GamePlayer> activePlayers = gamePlayerRepository.findByActiveTurnTrue();
 
         for (GamePlayer player : activePlayers) {
@@ -916,7 +917,7 @@ public class GameService {
 
             long elapsed = Duration.between(player.getTurnStartedAt(), Instant.now()).getSeconds();
 
-            if (elapsed >= turnLimitSeconds) {
+            if (elapsed >= TURN_LIMIT_SECONDS) {
                 log.info("Turn timeout for player {} in game {}",
                         player.getUser().getUsername(), game.getId());
 

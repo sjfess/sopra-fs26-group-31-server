@@ -184,7 +184,7 @@ public class GameControllerTest {
         placeMoveDTO.setCardIndex(4);
         placeMoveDTO.setPosition(1);
 
-        given(gameService.placeCard(1L, 4, 1)).willReturn(new Object[]{card, true, 3});
+        given(gameService.placeCard(1L, 4, 1)).willReturn(new GameService.PlacementResult(card, true, 3));
 
         mockMvc.perform(post("/games/1/moves")
                         .contentType(MediaType.APPLICATION_JSON)

@@ -154,15 +154,15 @@ public class GameController {
             @PathVariable Long gameId,
             @RequestBody PlaceMoveDTO placeMoveDTO) {
 
-        Object[] result = gameService.placeCard(
+        GameService.PlacementResult result = gameService.placeCard(
                 gameId,
                 placeMoveDTO.getCardIndex(),
                 placeMoveDTO.getPosition()
         );
 
-        EventCard card = (EventCard) result[0];
-        boolean correct = (boolean) result[1];
-        int timelineSize = (int) result[2];
+        EventCard card = result.card();
+        boolean correct = result.correct();
+        int timelineSize = result.timelineSize();
 
         PlacementResultDTO dto = new PlacementResultDTO();
         dto.setCorrect(correct);
