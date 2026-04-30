@@ -62,6 +62,9 @@ public class GameService {
     private static final int TIME_BONUS_PER_SECOND = 2;
     private static final int STREAK_BONUS_PER_STEP = 10;
     private static final int INITIAL_HAND_SIZE = 5;
+    private static final int HISTORY_UNO_INITIAL_HAND_SIZE = 3;
+    private static final int EXTRA_CARDS_PER_PLAYER_FOR_WRONG_PLACEMENTS = 5;
+    private static final int MINIMUM_DECK_SIZE = 20;
 
     public GameService(
             GameRepository gameRepository,
@@ -200,6 +203,7 @@ public class GameService {
         newGame.setEra(oldGame.getEra());
         newGame.setDifficulty(oldGame.getDifficulty());
         newGame.setGameMode(oldGame.getGameMode());
+        newGame.setCreatedAt(Instant.now());
         newGame.setHostId(requestingUserId); // sinnvoller als oldGame.getHostId()
         newGame.setStatus("WAITING");
         newGame.setDeckJson(null);
@@ -284,6 +288,7 @@ public class GameService {
     /**
      * Starts the game and initializes turn order and scores.
      */
+    @Transactional
     public Game startGame(Long gameId, int deckSize) {
         Game game = findGameOrThrow(gameId);
 
@@ -298,67 +303,354 @@ public class GameService {
                     "Not enough players or settings incomplete");
         }
 
-        log.info("Starting game {} – fetching {} cards for era {}", gameId, deckSize, game.getEra());
+        if (game.getGameMode() == GameMode.HISTORY_UNO) {
+            return startHistoryUnoGame(game, gamePlayers, deckSize);
+        }
 
-        // Determine how many curated cards to pre-seed on the timeline based on difficulty
+        return startTimelineGame(game, gamePlayers, deckSize);
+    }
+
+    private Game startTimelineGame(Game game, List<GamePlayer> gamePlayers, int deckSize) {
+        int effectiveDeckSize = calculateRequiredDeckSize(gamePlayers.size(), deckSize);
+
+        log.info("Starting Timeline game {} – fetching {} cards for era {} (requested: {}, players: {})",
+                game.getId(), effectiveDeckSize, game.getEra(), deckSize, gamePlayers.size());
+
         int timelineSeedCount = getTimelineSeedCount(game.getDifficulty());
 
-        // Get curated cards for this era and pick the seed cards
         List<EventCard> allCurated = new ArrayList<>(wikidataService.getCuratedCards(game.getEra()));
         Collections.shuffle(allCurated);
+
         List<EventCard> timelineSeedCards = new ArrayList<>();
         for (int i = 0; i < Math.min(timelineSeedCount, allCurated.size()); i++) {
             timelineSeedCards.add(allCurated.get(i));
         }
 
-        // Build a set of excluded titles so the main deck does not contain the seed cards
         Set<String> excludedTitles = new HashSet<>();
         for (EventCard seed : timelineSeedCards) {
             excludedTitles.add(seed.getTitle().toLowerCase());
         }
 
-        // Fetch the main deck and filter out any cards that are already on the timeline
-        List<EventCard> rawDeck = wikidataService.fetchEvents(game.getEra(), deckSize + timelineSeedCount);
-        List<EventCard> deck = new ArrayList<>();
-        for (EventCard card : rawDeck) {
-            if (!excludedTitles.contains(card.getTitle().toLowerCase())) {
+
+    // Fetch the main deck and filter out any cards that are already on the timeline
+    List<EventCard> rawDeck = wikidataService.fetchEvents(game.getEra(), effectiveDeckSize + timelineSeedCount);
+    List<EventCard> deck = new ArrayList<>();
+    Set<String> deckTitles = new HashSet<>();
+
+    for (EventCard card : rawDeck) {
+        String titleKey = card.getTitle().toLowerCase();
+
+        if (!excludedTitles.contains(titleKey) && deckTitles.add(titleKey)) {
+            deck.add(card);
+            if (deck.size() >= effectiveDeckSize) break;
+        }
+    }
+
+    // Fallback: if Wikidata did not provide enough usable cards,
+    // fill the remaining deck with curated cards from the same era.
+    if (deck.size() < effectiveDeckSize) {
+        for (EventCard card : allCurated) {
+            String titleKey = card.getTitle().toLowerCase();
+
+            if (!excludedTitles.contains(titleKey) && deckTitles.add(titleKey)) {
                 deck.add(card);
-                if (deck.size() >= deckSize) break;
+                if (deck.size() >= effectiveDeckSize) break;
+            }
+        }
+    }
+
+    // Last resort: start anyway, but log clearly that the deck is smaller than desired.
+    if (deck.size() < effectiveDeckSize) {
+        log.warn("Game {} starts with only {} cards although {} were requested for {} players in era {}",
+                game.getId(), deck.size(), effectiveDeckSize, gamePlayers.size(), game.getEra());
+    }
+
+    // Sort the seed cards chronologically so the timeline is ordered
+    timelineSeedCards.sort(Comparator.comparingInt(EventCard::getYear));
+
+    game.setDeckJson(serializeDeck(deck));
+    game.setDeckSize(deck.size());
+    game.setNextCardIndex(0);
+    game.setStatus("IN_PROGRESS");
+    game.setTimelineJson(serializeDeck(timelineSeedCards));
+    log.info("Game {} seeded timeline with {} curated cards (difficulty: {})",
+            game.getId(), timelineSeedCards.size(), game.getDifficulty());
+
+    int cardsPerPlayer = INITIAL_HAND_SIZE;
+    for (int i = 0; i < gamePlayers.size(); i++) {
+        GamePlayer gp = gamePlayers.get(i);
+        gp.setScore(0);
+        gp.setCorrectPlacements(0);
+        gp.setIncorrectPlacements(0);
+        gp.setCorrectStreak(0);
+        gp.setBestStreak(0);
+        gp.setCurrentCardIndex(null);
+        gp.setHandIndicesJson("[]");
+        gp.setTurnStartedAt(null);
+        dealCardsToPlayer(gp, game, cardsPerPlayer);
+        if (i == 0) {
+            gp.setActiveTurn(true);
+            gp.setTurnStartedAt(Instant.now());
+        } else {
+            gp.setActiveTurn(false);
+        }
+        gamePlayerRepository.save(gp);
+    }
+
+    gameRepository.save(game);
+    return game;
+}
+
+    private Game startHistoryUnoGame(Game game, List<GamePlayer> gamePlayers, int deckSize) {
+        int minimumCardsNeeded = gamePlayers.size() * HISTORY_UNO_INITIAL_HAND_SIZE + 1;
+        int effectiveDeckSize = Math.max(deckSize, minimumCardsNeeded + 10);
+
+        log.info("Starting History Uno game {} – fetching {} cards for era {}",
+                game.getId(), effectiveDeckSize, game.getEra());
+
+        List<EventCard> deck = wikidataService.fetchEvents(game.getEra(), effectiveDeckSize);
+
+        if (deck.size() < effectiveDeckSize) {
+            List<EventCard> curatedCards = new ArrayList<>(wikidataService.getCuratedCards(game.getEra()));
+            Set<String> existingTitles = new HashSet<>();
+
+            for (EventCard card : deck) {
+                existingTitles.add(card.getTitle().toLowerCase());
+            }
+
+            for (EventCard card : curatedCards) {
+                String titleKey = card.getTitle().toLowerCase();
+                if (existingTitles.add(titleKey)) {
+                    deck.add(card);
+                    if (deck.size() >= effectiveDeckSize) break;
+                }
             }
         }
 
-        // Sort the seed cards chronologically so the timeline is ordered
-        timelineSeedCards.sort(Comparator.comparingInt(EventCard::getYear));
+        if (deck.size() < minimumCardsNeeded) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Not enough cards available to start History Uno");
+        }
+
+        deck.sort(Comparator.comparingInt(EventCard::getYear));
+
+        EventCard startingCard = deck.get(0);
+        List<EventCard> discardPile = new ArrayList<>();
+        discardPile.add(startingCard);
 
         game.setDeckJson(serializeDeck(deck));
         game.setDeckSize(deck.size());
-        game.setNextCardIndex(0);
+        game.setNextCardIndex(1);
         game.setStatus("IN_PROGRESS");
-        game.setTimelineJson(serializeDeck(timelineSeedCards));
-        log.info("Game {} seeded timeline with {} curated cards (difficulty: {})",
-                gameId, timelineSeedCards.size(), game.getDifficulty());
+        game.setTimelineJson(serializeDeck(discardPile));
 
-        int cardsPerPlayer = INITIAL_HAND_SIZE;
         for (int i = 0; i < gamePlayers.size(); i++) {
             GamePlayer gp = gamePlayers.get(i);
             gp.setScore(0);
+            gp.setCorrectPlacements(0);
+            gp.setIncorrectPlacements(0);
             gp.setCorrectStreak(0);
             gp.setBestStreak(0);
+            gp.setCurrentCardIndex(null);
             gp.setHandIndicesJson("[]");
             gp.setTurnStartedAt(null);
-            dealCardsToPlayer(gp, game, cardsPerPlayer);
+
+            dealCardsToPlayer(gp, game, HISTORY_UNO_INITIAL_HAND_SIZE);
+
             if (i == 0) {
                 gp.setActiveTurn(true);
                 gp.setTurnStartedAt(Instant.now());
             } else {
                 gp.setActiveTurn(false);
             }
+
             gamePlayerRepository.save(gp);
         }
 
         gameRepository.save(game);
+
+        log.info("History Uno game {} started with starting card '{}' ({})",
+                game.getId(), startingCard.getTitle(), startingCard.getYear());
+
         return game;
     }
+
+@Transactional
+public Object[] playHistoryUnoCard(Long gameId, Long userId, int cardIndex) {
+    Game game = findGameOrThrow(gameId);
+    assertInProgress(game);
+
+    if (game.getGameMode() != GameMode.HISTORY_UNO) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "This action is only available in History Uno mode");
+    }
+
+    User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, "User with id " + userId + " was not found"));
+
+    GamePlayer activePlayer = gamePlayerRepository.findByGameAndActiveTurnTrue(game)
+            .orElseThrow(() -> new ResponseStatusException(
+                    HttpStatus.CONFLICT, "No active player found for this game"));
+
+    if (!activePlayer.getUser().getId().equals(userId)) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "It is not this player's turn");
+    }
+
+    List<Integer> hand = deserializeHandIndices(activePlayer.getHandIndicesJson());
+
+    if (!hand.contains(cardIndex)) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Card index " + cardIndex + " is not in player's hand");
+    }
+
+    List<EventCard> deck = deserializeDeck(game.getDeckJson());
+
+    if (cardIndex < 0 || cardIndex >= deck.size()) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                "Card index " + cardIndex + " out of range");
+    }
+
+    EventCard playedCard = deck.get(cardIndex);
+
+
+    int expectedNextIndex = getExpectedNextHistoryUnoCardIndex(game);
+    boolean correct = cardIndex == expectedNextIndex;
+
+    if (correct) {
+        List<EventCard> discardPile = deserializeDeck(game.getTimelineJson());
+        discardPile.add(playedCard);
+        game.setTimelineJson(serializeDeck(discardPile));
+
+        hand.remove(Integer.valueOf(cardIndex));
+        activePlayer.setHandIndicesJson(serializeHandIndices(hand));
+        activePlayer.setCardsInHand(hand.size());
+
+        activePlayer.setCorrectPlacements(activePlayer.getCorrectPlacements() + 1);
+        activePlayer.setCorrectStreak(activePlayer.getCorrectStreak() + 1);
+
+        if (activePlayer.getBestStreak() == null ||
+                activePlayer.getCorrectStreak() > activePlayer.getBestStreak()) {
+            activePlayer.setBestStreak(activePlayer.getCorrectStreak());
+        }
+
+        // Optional: kleiner Score, auch wenn es collaborative ist
+        activePlayer.setScore(activePlayer.getScore() + BASE_CORRECT_POINTS);
+    } else {
+        activePlayer.setIncorrectPlacements(activePlayer.getIncorrectPlacements() + 1);
+        activePlayer.setCorrectStreak(0);
+
+        // Laut Story: invalid move -> draw one card
+        dealCardsToPlayer(activePlayer, game, 1);
+    }
+
+    activePlayer.setCurrentCardIndex(null);
+
+    if (isHistoryUnoGameFinished(game)) {
+        activePlayer.setActiveTurn(false);
+        gamePlayerRepository.save(activePlayer);
+        gameRepository.save(game);
+        finalizeGame(game.getId());
+    } else {
+        gamePlayerRepository.save(activePlayer);
+        gameRepository.save(game);
+        advanceTurn(game, activePlayer);
+        gameRepository.save(game);
+    }
+
+    log.info("History Uno game {} – player {} played '{}' ({}): {}",
+            gameId,
+            activePlayer.getUser().getUsername(),
+            playedCard.getTitle(),
+            playedCard.getYear(),
+            correct ? "CORRECT" : "WRONG");
+
+    return new Object[]{playedCard, correct, activePlayer.getCardsInHand()};
+}
+
+private int getExpectedNextHistoryUnoCardIndex(Game game) {
+    List<EventCard> discardPile = deserializeDeck(game.getTimelineJson());
+    int expectedNextIndex = discardPile.size();
+
+    if (expectedNextIndex >= game.getDeckSize()) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "No next card available");
+    }
+
+    return expectedNextIndex;
+}
+
+@Transactional
+public HandCardDTO drawHistoryUnoCard(Long gameId, Long userId) {
+    Game game = findGameOrThrow(gameId);
+    assertInProgress(game);
+
+    if (game.getGameMode() != GameMode.HISTORY_UNO) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "This action is only available in History Uno mode");
+    }
+
+    User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, "User with id " + userId + " was not found"));
+
+    GamePlayer activePlayer = gamePlayerRepository.findByGameAndActiveTurnTrue(game)
+            .orElseThrow(() -> new ResponseStatusException(
+                    HttpStatus.CONFLICT, "No active player found for this game"));
+
+    if (!activePlayer.getUser().getId().equals(userId)) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "It is not this player's turn");
+    }
+
+    int oldNextCardIndex = game.getNextCardIndex();
+
+    if (oldNextCardIndex >= game.getDeckSize()) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "No cards left in deck");
+    }
+
+    dealCardsToPlayer(activePlayer, game, 1);
+
+    List<EventCard> deck = deserializeDeck(game.getDeckJson());
+    EventCard drawnCard = deck.get(oldNextCardIndex);
+
+    activePlayer.setCurrentCardIndex(null);
+    activePlayer.setCorrectStreak(0);
+
+    gamePlayerRepository.save(activePlayer);
+    gameRepository.save(game);
+
+    advanceTurn(game, activePlayer);
+
+    HandCardDTO dto = new HandCardDTO();
+    dto.setDeckIndex(oldNextCardIndex);
+    dto.setTitle(drawnCard.getTitle());
+    dto.setImageUrl(drawnCard.getImageUrl());
+
+    return dto;
+}
+
+private boolean isHistoryUnoGameFinished(Game game) {
+    if (game.getGameMode() != GameMode.HISTORY_UNO) {
+        return false;
+    }
+
+    List<GamePlayer> players = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
+
+    if (players.isEmpty()) {
+        return false;
+    }
+
+    for (GamePlayer player : players) {
+        if (player.getCardsInHand() != null && player.getCardsInHand() > 0) {
+            return false;
+        }
+    }
+
+    return true;
+}
 
     /**
      * Selects a card from the active player's hand.
@@ -366,6 +658,11 @@ public class GameService {
     public EventCard drawCard(Long gameId, Long userId, int deckIndex) {
         Game game = findGameOrThrow(gameId);
         assertInProgress(game);
+
+        if (game.getGameMode() != GameMode.TIMELINE) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This action is only available in Timeline mode");
+        }
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -436,9 +733,15 @@ public class GameService {
     /**
      * Places the active player's currently drawn card at the chosen timeline position.
      */
+    @Transactional
     public Object[] placeCard(Long gameId, int cardIndex, int position) {
         Game game = findGameOrThrow(gameId);
         assertInProgress(game);
+
+        if (game.getGameMode() != GameMode.TIMELINE) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This action is only available in Timeline mode");
+        }
 
         GamePlayer activePlayer = gamePlayerRepository.findByGameAndActiveTurnTrue(game)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -821,6 +1124,14 @@ public class GameService {
                         HttpStatus.NOT_FOUND, "Game " + gameId + " not found"));
     }
 
+    private int calculateRequiredDeckSize(int playerCount, int requestedDeckSize) {
+        int cardsNeededForInitialHands = playerCount * INITIAL_HAND_SIZE;
+        int bufferForWrongPlacements = playerCount * EXTRA_CARDS_PER_PLAYER_FOR_WRONG_PLACEMENTS;
+        int requiredDeckSize = cardsNeededForInitialHands + bufferForWrongPlacements;
+
+        return Math.max(Math.max(requestedDeckSize, requiredDeckSize), MINIMUM_DECK_SIZE);
+    }
+
     private int getTimelineSeedCount(Difficulty difficulty) {
         if (difficulty == null) return 0;
         switch (difficulty) {
@@ -902,7 +1213,8 @@ public class GameService {
         }
     }
 
-    @Scheduled(fixedDelay = 5000) // runs every 5 seconds
+    @Scheduled(fixedDelay = 5000)// runs every 5 seconds
+    @Transactional
     public void checkTurnTimeouts() {
         long turnLimitSeconds = TURN_LIMIT_SECONDS; // configure as needed
 
@@ -923,13 +1235,15 @@ public class GameService {
                 player.setCorrectStreak(0);
                 player.setCurrentCardIndex(null);
 
-                if (isTimelineGameFinished(game)) {
+                boolean gameFinished =
+                        isTimelineGameFinished(game) || isHistoryUnoGameFinished(game);
+
+                if (gameFinished) {
                     player.setActiveTurn(false);
                     gamePlayerRepository.save(player);
                     gameRepository.save(game);
                     finalizeGame(game.getId());
-                }
-                else {
+                } else {
                     gamePlayerRepository.save(player);
                     gameRepository.save(game);
                     advanceTurn(game, player);
@@ -938,6 +1252,19 @@ public class GameService {
             }
         }
     }
+
+    public List<EventCard> getHistoryUnoDiscardPile(Long gameId) {
+        Game game = findGameOrThrow(gameId);
+        assertInProgress(game);
+
+        if (game.getGameMode() != GameMode.HISTORY_UNO) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This action is only available in History Uno mode");
+        }
+
+        return deserializeDeck(game.getTimelineJson());
+    }
+
     public Game updateSettings(Long gameId, GameSettingsPutDTO dto) {
         Game game = findGameOrThrow(gameId);
 
@@ -1029,7 +1356,7 @@ public class GameService {
             int score = gamePlayer.getScore() != null ? gamePlayer.getScore() : 0;
             int correctPlacements = gamePlayer.getCorrectPlacements() != null ? gamePlayer.getCorrectPlacements() : 0;
             int incorrectPlacements = gamePlayer.getIncorrectPlacements() != null ? gamePlayer.getIncorrectPlacements() : 0;
-            boolean winner = score == highestScore;
+            boolean winner = game.getGameMode() == GameMode.HISTORY_UNO || score == highestScore;
 
             user.setTotalGamesPlayed(user.getTotalGamesPlayed() + 1);
             user.setTotalPoints(user.getTotalPoints() + score);
@@ -1079,7 +1406,7 @@ public class GameService {
             dto.setScore(score);
             dto.setCorrectPlacements(gp.getCorrectPlacements() != null ? gp.getCorrectPlacements() : 0);
             dto.setIncorrectPlacements(gp.getIncorrectPlacements() != null ? gp.getIncorrectPlacements() : 0);
-            dto.setWinner(score == highestScore);
+            dto.setWinner(game.getGameMode() == GameMode.HISTORY_UNO || score == highestScore);
             dto.setBestStreak(gp.getBestStreak());
             results.add(dto);
         }
