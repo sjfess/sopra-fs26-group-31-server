@@ -458,10 +458,26 @@ public class GameService {
 
         game.setDeckJson(serializeDeck(deck));
         game.setDeckSize(deck.size());
-        game.setNextCardIndex(1);
         game.setStatus("IN_PROGRESS");
         game.setTimelineJson(serializeDeck(discardPile));
 
+        // Build a shuffled list of all deal-able indices (1..N-1) so that
+        // every player receives a random cross-section of the chronological
+        // deck rather than a sequential slice.  Sequential slicing would give
+        // Player 1 all the earliest cards, making it impossible for other
+        // players to play correctly on their first turns.
+        int totalInitialCards = gamePlayers.size() * HISTORY_UNO_INITIAL_HAND_SIZE;
+        List<Integer> dealPool = new ArrayList<>();
+        for (int i = 1; i < deck.size() && dealPool.size() < totalInitialCards; i++) {
+            dealPool.add(i);
+        }
+        Collections.shuffle(dealPool, random);
+
+        // nextCardIndex points past the initially dealt block so penalty draws
+        // continue to hand out fresh cards sequentially.
+        game.setNextCardIndex(1 + dealPool.size());
+
+        int cursor = 0;
         for (int i = 0; i < gamePlayers.size(); i++) {
             GamePlayer gp = gamePlayers.get(i);
             gp.setScore(0);
@@ -470,10 +486,15 @@ public class GameService {
             gp.setCorrectStreak(0);
             gp.setBestStreak(0);
             gp.setCurrentCardIndex(null);
-            gp.setHandIndicesJson("[]");
             gp.setTurnStartedAt(null);
 
-            dealCardsToPlayer(gp, game, HISTORY_UNO_INITIAL_HAND_SIZE);
+            List<Integer> hand = new ArrayList<>();
+            for (int j = 0; j < HISTORY_UNO_INITIAL_HAND_SIZE && cursor < dealPool.size(); j++, cursor++) {
+                hand.add(dealPool.get(cursor));
+            }
+            Collections.sort(hand);
+            gp.setHandIndicesJson(serializeHandIndices(hand));
+            gp.setCardsInHand(hand.size());
 
             if (i == 0) {
                 gp.setActiveTurn(true);
@@ -503,7 +524,7 @@ public Object[] playHistoryUnoCard(Long gameId, Long userId, int cardIndex) {
                 "This action is only available in History Uno mode");
     }
 
-    User user = userRepository.findById(userId)
+    userRepository.findById(userId)
             .orElseThrow(() -> new ResponseStatusException(
                     HttpStatus.NOT_FOUND, "User with id " + userId + " was not found"));
 
@@ -609,7 +630,7 @@ public HandCardDTO drawHistoryUnoCard(Long gameId, Long userId) {
                 "This action is only available in History Uno mode");
     }
 
-    User user = userRepository.findById(userId)
+    userRepository.findById(userId)
             .orElseThrow(() -> new ResponseStatusException(
                     HttpStatus.NOT_FOUND, "User with id " + userId + " was not found"));
 
@@ -1192,9 +1213,9 @@ private boolean isHistoryUnoGameFinished(Game game) {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Game with lobby code " + lobbyCode + " not found"));
 
-        if (!"WAITING".equals(game.getStatus())) {
+        if (!"WAITING".equals(game.getStatus()) && !"IN_PROGRESS".equals(game.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Cannot leave a game that is already " + game.getStatus());
+                    "Cannot leave a game with status " + game.getStatus());
         }
 
         User user = userRepository.findById(userId)
@@ -1206,6 +1227,12 @@ private boolean isHistoryUnoGameFinished(Game game) {
                     "User is not part of this game");
         }
 
+        if ("IN_PROGRESS".equals(game.getStatus())) {
+            leaveInProgressGame(game, user);
+            return;
+        }
+
+        // WAITING: existing lobby-leave logic
         user.setStatus(UserStatus.ONLINE);
         userRepository.save(user);
 
@@ -1214,23 +1241,75 @@ private boolean isHistoryUnoGameFinished(Game game) {
         List<GamePlayer> remaining =
                 gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
 
-        // ── Fall 1: Letzter Spieler hat verlassen → Lobby löschen ──────────────
         if (remaining.isEmpty()) {
             gameRepository.delete(game);
             return;
         }
 
-        // turn-renumbering if player leaves mid-game
         for (int i = 0; i < remaining.size(); i++) {
             remaining.get(i).setTurnOrder(i);
             gamePlayerRepository.save(remaining.get(i));
         }
 
-        // ── Fall 2: Host hat verlassen → zufälligen neuen Host bestimmen ───────
         if (game.getHostId().equals(userId)) {
             GamePlayer newHost = remaining.get(random.nextInt(remaining.size()));
             game.setHostId(newHost.getUser().getId());
             gameRepository.save(game);
+        }
+    }
+
+    private void leaveInProgressGame(Game game, User user) {
+        GamePlayer leavingPlayer = gamePlayerRepository.findByGameAndUser(game, user)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Player record not found"));
+
+        boolean wasActiveTurn = Boolean.TRUE.equals(leavingPlayer.getActiveTurn());
+        int leavingTurnOrder = leavingPlayer.getTurnOrder();
+
+        // Snapshot the full turn order before removing the leaving player
+        List<GamePlayer> allPlayers = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
+
+        user.setStatus(UserStatus.ONLINE);
+        userRepository.save(user);
+        gamePlayerRepository.deleteByGameAndUser(game, user);
+
+        List<GamePlayer> remaining = new ArrayList<>();
+        for (GamePlayer p : allPlayers) {
+            if (!p.getId().equals(leavingPlayer.getId())) {
+                remaining.add(p);
+            }
+        }
+
+        if (remaining.isEmpty()) {
+            gameRepository.delete(game);
+            return;
+        }
+
+        // Renumber to keep turn order contiguous
+        for (int i = 0; i < remaining.size(); i++) {
+            remaining.get(i).setTurnOrder(i);
+            gamePlayerRepository.save(remaining.get(i));
+        }
+
+        // Reassign host if needed
+        if (game.getHostId().equals(user.getId())) {
+            game.setHostId(remaining.get(0).getUser().getId());
+            gameRepository.save(game);
+        }
+
+        // One player left — end the game, that player wins
+        if (remaining.size() == 1) {
+            finalizeGame(game.getId());
+            return;
+        }
+
+        // Give the turn to whoever was next in rotation
+        if (wasActiveTurn) {
+            int nextIndex = leavingTurnOrder % remaining.size();
+            GamePlayer nextPlayer = remaining.get(nextIndex);
+            nextPlayer.setActiveTurn(true);
+            nextPlayer.setTurnStartedAt(Instant.now());
+            gamePlayerRepository.save(nextPlayer);
         }
     }
 
