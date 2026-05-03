@@ -43,6 +43,9 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class GameService {
@@ -64,10 +67,19 @@ public class GameService {
     private static final int BASE_CORRECT_POINTS = 100;
     private static final int TIME_BONUS_PER_SECOND = 2;
     private static final int STREAK_BONUS_PER_STEP = 10;
-    private static final int INITIAL_HAND_SIZE = 5;
+    private static final int INITIAL_HAND_SIZE = 1;
     private static final int HISTORY_UNO_INITIAL_HAND_SIZE = 3;
     private static final int EXTRA_CARDS_PER_PLAYER_FOR_WRONG_PLACEMENTS = 5;
     private static final int MINIMUM_DECK_SIZE = 20;
+    private static final int REMATCH_CLOSE_GRACE_SECONDS = 30;
+
+    private final ScheduledExecutorService rematchCloseScheduler =
+            Executors.newSingleThreadScheduledExecutor(runnable -> {
+                Thread thread = new Thread(runnable);
+                thread.setDaemon(true);
+                thread.setName("rematch-close-scheduler");
+                return thread;
+            });
 
     public GameService(
             GameRepository gameRepository,
@@ -270,7 +282,7 @@ public class GameService {
         }
 
         Game newGame = createRematch(finishedGameId, requestingUserId);
-        deleteFinishedGameInternal(oldGame);
+        scheduleFinishedGameClose(oldGame.getId(), Duration.ofSeconds(REMATCH_CLOSE_GRACE_SECONDS));
         return newGame;
     }
 
@@ -301,6 +313,24 @@ public class GameService {
         chatMessageRepository.deleteAllByGameId(game.getId());
         gameInviteRepository.deleteAllByGameId(game.getId());
         gameRepository.delete(game);
+    }
+
+    private void scheduleFinishedGameClose(Long gameId, Duration delay) {
+        rematchCloseScheduler.schedule(() -> {
+            try {
+                Optional<Game> maybeGame = gameRepository.findById(gameId);
+                if (maybeGame.isEmpty()) {
+                    return;
+                }
+                Game game = maybeGame.get();
+                if (!"FINISHED".equals(game.getStatus())) {
+                    return;
+                }
+                deleteFinishedGameInternal(game);
+            } catch (Exception e) {
+                log.warn("Failed to close finished game {} after rematch grace period", gameId, e);
+            }
+        }, delay.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -1597,14 +1627,13 @@ private boolean isHistoryUnoGameFinished(Game game) {
         gameInviteRepository.deleteById(inviteId);
     }
 
-    // cleans up abandoned games after 30 minutes
+    // Cleans up abandoned games after the cutoff window.
     @Scheduled(fixedDelay = 1800000)
     @Transactional
     public void cleanupAbandonedGames() {
         Instant cutoff = Instant.now().minus(Duration.ofHours(3));
         for (Game game : gameRepository.findAll()) {
-            if ("FINISHED".equals(game.getStatus()) ||
-                    (game.getCreatedAt() != null && game.getCreatedAt().isBefore(cutoff))) {
+            if (game.getCreatedAt() != null && game.getCreatedAt().isBefore(cutoff)) {
                 List<GamePlayer> players = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
                 for (GamePlayer gp : players) {
                     User u = gp.getUser();
