@@ -101,7 +101,7 @@ public class GameServiceTest {
         gp2.setActiveTurn(false);
 
         List<EventCard> deck = new java.util.ArrayList<>();
-        for (int i = 0; i < 20; i++) {
+        for (int i = 0; i < 10; i++) {
             EventCard card = new EventCard();
             card.setTitle("Event " + i);
             card.setYear(1900 + i);
@@ -111,11 +111,12 @@ public class GameServiceTest {
         when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
         when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(gp1, gp2));
         when(wikidataService.getCuratedCards(any())).thenReturn(Collections.emptyList());
-        when(wikidataService.fetchEvents(HistoricalEra.MODERN, 20)).thenReturn(deck);
+        when(wikidataService.fetchEvents(HistoricalEra.MODERN, 10)).thenReturn(deck);
+
         Game startedGame = gameService.startGame(1L, 10);
 
         assertEquals("IN_PROGRESS", startedGame.getStatus());
-        assertEquals(20, startedGame.getDeckSize());
+        assertEquals(10, startedGame.getDeckSize());
         assertEquals(10, startedGame.getNextCardIndex());
         assertNotNull(startedGame.getDeckJson());
 
@@ -488,7 +489,6 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
-        game.setGameMode(GameMode.TIMELINE);
 
         EventCard card0 = new EventCard();
         card0.setTitle("Moon Landing");
@@ -529,7 +529,6 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
-        game.setGameMode(GameMode.TIMELINE);
 
         EventCard c1 = new EventCard();
         c1.setTitle("A");
@@ -568,7 +567,6 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
-        game.setGameMode(GameMode.TIMELINE);
         game.setTimelineJson("[]");
 
         EventCard card1 = new EventCard();
@@ -610,7 +608,6 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
-        game.setGameMode(GameMode.TIMELINE);
         game.setTimelineJson("[]");
 
         EventCard card = new EventCard();
@@ -1000,7 +997,6 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
-        game.setGameMode(GameMode.TIMELINE);
 
         EventCard card0 = new EventCard();
         card0.setTitle("A");
@@ -1115,7 +1111,6 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
-        game.setGameMode(GameMode.TIMELINE);
 
         User user = new User();
         user.setId(10L);
@@ -1138,7 +1133,6 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
-        game.setGameMode(GameMode.TIMELINE);
 
         when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
         when(userRepository.findById(10L)).thenReturn(Optional.empty());
@@ -1208,7 +1202,6 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
-        game.setGameMode(GameMode.TIMELINE);
         game.setTimelineJson("[]");
 
         when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
@@ -2164,6 +2157,26 @@ public class GameServiceTest {
 
         verify(gameRepository, never()).delete(any(Game.class));
     }
+    @Test
+    void joinGame_lobbyFull_throwsConflict() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setLobbyCode("ABC123");
+        game.setStatus("WAITING");
+
+        List<GamePlayer> fullLobby = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            fullLobby.add(new GamePlayer());
+        }
+
+        when(gameRepository.findByLobbyCode("ABC123")).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(fullLobby);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> gameService.joinGame("ABC123", 10L));
+
+        assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+    }
 
     @Test
     public void startGame_requestedDeckTooSmall_generatesDeckBasedOnPlayerCount() {
@@ -2283,4 +2296,24 @@ public class GameServiceTest {
         assertTrue(finalDeck.stream().anyMatch(card -> card.getTitle().startsWith("Curated Event")));
     }
 
+    @Test
+    void joinGame_lobbyFull_throwsConflict() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setLobbyCode("ABC123");
+        game.setStatus("WAITING");
+
+        List<GamePlayer> fullLobby = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            fullLobby.add(new GamePlayer());
+        }
+
+        when(gameRepository.findByLobbyCode("ABC123")).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(fullLobby);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> gameService.joinGame("ABC123", 10L));
+
+        assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+    }
 }
