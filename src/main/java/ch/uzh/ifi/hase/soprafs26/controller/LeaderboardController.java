@@ -22,4 +22,16 @@ public class LeaderboardController {
     public List<LeaderboardEntryDTO> getLeaderboard() {
         return leaderboardService.getLeaderboard();
     }
+
+    @GetMapping("/leaderboard/users/{userId}")
+
+    @ResponseStatus(HttpStatus.OK)
+
+    @ResponseBody
+
+    public LeaderboardEntryDTO getLeaderboardEntryForUser(@PathVariable Long userId) {
+
+        return leaderboardService.getLeaderboardEntryForUser(userId);
+
+    }
 }

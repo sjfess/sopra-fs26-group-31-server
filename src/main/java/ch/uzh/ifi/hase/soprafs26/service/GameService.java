@@ -43,9 +43,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+
 
 @Service
 public class GameService {
@@ -67,19 +65,12 @@ public class GameService {
     private static final int BASE_CORRECT_POINTS = 100;
     private static final int TIME_BONUS_PER_SECOND = 2;
     private static final int STREAK_BONUS_PER_STEP = 10;
-    private static final int INITIAL_HAND_SIZE = 1;
+    private static final int INITIAL_HAND_SIZE = 5;
     private static final int HISTORY_UNO_INITIAL_HAND_SIZE = 3;
     private static final int EXTRA_CARDS_PER_PLAYER_FOR_WRONG_PLACEMENTS = 5;
     private static final int MINIMUM_DECK_SIZE = 20;
-    private static final int REMATCH_CLOSE_GRACE_SECONDS = 30;
 
-    private final ScheduledExecutorService rematchCloseScheduler =
-            Executors.newSingleThreadScheduledExecutor(runnable -> {
-                Thread thread = new Thread(runnable);
-                thread.setDaemon(true);
-                thread.setName("rematch-close-scheduler");
-                return thread;
-            });
+
 
     public GameService(
             GameRepository gameRepository,
@@ -282,7 +273,6 @@ public class GameService {
         }
 
         Game newGame = createRematch(finishedGameId, requestingUserId);
-        scheduleFinishedGameClose(oldGame.getId(), Duration.ofSeconds(REMATCH_CLOSE_GRACE_SECONDS));
         return newGame;
     }
 
@@ -315,23 +305,6 @@ public class GameService {
         gameRepository.delete(game);
     }
 
-    private void scheduleFinishedGameClose(Long gameId, Duration delay) {
-        rematchCloseScheduler.schedule(() -> {
-            try {
-                Optional<Game> maybeGame = gameRepository.findById(gameId);
-                if (maybeGame.isEmpty()) {
-                    return;
-                }
-                Game game = maybeGame.get();
-                if (!"FINISHED".equals(game.getStatus())) {
-                    return;
-                }
-                deleteFinishedGameInternal(game);
-            } catch (Exception e) {
-                log.warn("Failed to close finished game {} after rematch grace period", gameId, e);
-            }
-        }, delay.toMillis(), TimeUnit.MILLISECONDS);
-    }
 
     /**
      * Starts the game and initializes turn order and scores.
@@ -1480,6 +1453,8 @@ private boolean isHistoryUnoGameFinished(Game game) {
 
         List<FinalResultDTO> finalResults = new ArrayList<>();
 
+        boolean shouldUpdateGlobalStats = game.getGameMode() == GameMode.TIMELINE;
+
         for (GamePlayer gamePlayer : gamePlayers) {
             User user = gamePlayer.getUser();
 
@@ -1488,13 +1463,15 @@ private boolean isHistoryUnoGameFinished(Game game) {
             int incorrectPlacements = gamePlayer.getIncorrectPlacements() != null ? gamePlayer.getIncorrectPlacements() : 0;
             boolean winner = game.getGameMode() == GameMode.HISTORY_UNO || score == highestScore;
 
-            user.setTotalGamesPlayed(user.getTotalGamesPlayed() + 1);
-            user.setTotalPoints(user.getTotalPoints() + score);
-            user.setTotalCorrectPlacements(user.getTotalCorrectPlacements() + correctPlacements);
-            user.setTotalIncorrectPlacements(user.getTotalIncorrectPlacements() + incorrectPlacements);
+            if (shouldUpdateGlobalStats) {
+                user.setTotalGamesPlayed(nullToZero(user.getTotalGamesPlayed()) + 1);
+                user.setTotalPoints(nullToZero(user.getTotalPoints()) + score);
+                user.setTotalCorrectPlacements(nullToZero(user.getTotalCorrectPlacements()) + correctPlacements);
+                user.setTotalIncorrectPlacements(nullToZero(user.getTotalIncorrectPlacements()) + incorrectPlacements);
 
-            if (winner) {
-                user.setTotalWins(user.getTotalWins() + 1);
+                if (winner) {
+                    user.setTotalWins(nullToZero(user.getTotalWins()) + 1);
+                }
             }
 
             user.setStatus(UserStatus.ONLINE);
@@ -1520,6 +1497,10 @@ private boolean isHistoryUnoGameFinished(Game game) {
 
 
         return finalResults;
+    }
+
+    private int nullToZero(Integer value) {
+        return value != null ? value : 0;
     }
 
     private List<FinalResultDTO> buildFinalResultDTOs(Game game) {
@@ -1632,14 +1613,27 @@ private boolean isHistoryUnoGameFinished(Game game) {
     @Transactional
     public void cleanupAbandonedGames() {
         Instant cutoff = Instant.now().minus(Duration.ofHours(3));
+
         for (Game game : gameRepository.findAll()) {
-            if (game.getCreatedAt() != null && game.getCreatedAt().isBefore(cutoff)) {
+            boolean isOldFinishedGame =
+                    "FINISHED".equals(game.getStatus())
+                            && game.getCreatedAt() != null
+                            && game.getCreatedAt().isBefore(cutoff);
+
+            boolean isOldWaitingGame =
+                    "WAITING".equals(game.getStatus())
+                            && game.getCreatedAt() != null
+                            && game.getCreatedAt().isBefore(cutoff);
+
+            if (isOldFinishedGame || isOldWaitingGame) {
                 List<GamePlayer> players = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
+
                 for (GamePlayer gp : players) {
                     User u = gp.getUser();
                     u.setStatus(UserStatus.ONLINE);
                     userRepository.save(u);
                 }
+
                 deleteFinishedGameInternal(game);
             }
         }
