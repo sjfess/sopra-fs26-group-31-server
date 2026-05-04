@@ -15,6 +15,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import org.mockito.Mockito;
+import org.mockito.ArgumentCaptor;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @ExtendWith(MockitoExtension.class)
 class WikidataServiceTest {
@@ -451,5 +454,146 @@ class WikidataServiceTest {
         List<EventCard> result = spy.fetchEvents(HistoricalEra.INFORMATION, 5);
 
         assertNotNull(result);
+    }
+
+    @Test
+    void getCuratedCards_medieval_containsMagnaCarta() throws Exception {
+        List<EventCard> curated = invokeGetCuratedCards(HistoricalEra.MEDIEVAL);
+
+        assertFalse(curated.isEmpty(), "Curated cards for MEDIEVAL must not be empty");
+        assertTrue(
+                curated.stream().anyMatch(c -> c.getTitle().equals("Signing of the Magna Carta")),
+                "MEDIEVAL curated cards should contain 'Signing of the Magna Carta'"
+        );
+    }
+
+    @Test
+    void getCuratedCards_renaissance_containsPrintingPress() throws Exception {
+        List<EventCard> curated = invokeGetCuratedCards(HistoricalEra.RENAISSANCE);
+
+        assertFalse(curated.isEmpty(), "Curated cards for RENAISSANCE must not be empty");
+        assertTrue(
+                curated.stream().anyMatch(c -> c.getTitle().equals("Gutenberg invents the Printing Press")),
+                "RENAISSANCE curated cards should contain Gutenberg's printing press"
+        );
+    }
+
+    @Test
+    void getCuratedCards_modern_excludesInformationCards() throws Exception {
+        List<EventCard> curated = invokeGetCuratedCards(HistoricalEra.MODERN);
+
+        assertFalse(curated.isEmpty(), "Curated cards for MODERN must not be empty");
+        assertFalse(
+                curated.stream().anyMatch(c -> c.getTitle().contains("Moon Landing")),
+                "MODERN curated cards must not contain INFORMATION-era cards like Moon Landing"
+        );
+    }
+
+    @Test
+    void getCuratedCards_information_excludesAncientCards() throws Exception {
+        List<EventCard> curated = invokeGetCuratedCards(HistoricalEra.INFORMATION);
+
+        assertFalse(curated.isEmpty(), "Curated cards for INFORMATION must not be empty");
+        assertFalse(
+                curated.stream().anyMatch(c -> c.getTitle().contains("Parthenon")),
+                "INFORMATION curated cards must not contain ANCIENT-era cards like the Parthenon"
+        );
+    }
+
+    @Test
+    void fetchEvents_callsRunSparqlFourTimes() {
+        WikidataService spy = Mockito.spy(new WikidataService());
+        doReturn(List.of()).when(spy).runSparql(anyString());
+
+        spy.fetchEvents(HistoricalEra.MEDIEVAL, 5);
+
+        verify(spy, times(4)).runSparql(anyString());
+    }
+
+    @Test
+    void fetchEvents_medievalQueriesContainEraBounds() {
+        WikidataService spy = Mockito.spy(new WikidataService());
+        doReturn(List.of()).when(spy).runSparql(anyString());
+
+        spy.fetchEvents(HistoricalEra.MEDIEVAL, 5);
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(spy, times(4)).runSparql(captor.capture());
+
+        List<String> queries = captor.getAllValues();
+        assertEquals(4, queries.size());
+
+        for (String query : queries) {
+            assertTrue(
+                    query.contains(">= " + HistoricalEra.MEDIEVAL.getStartYear()),
+                    "Each SPARQL query must include the MEDIEVAL start year"
+            );
+            assertTrue(
+                    query.contains("<= " + HistoricalEra.MEDIEVAL.getEndYear()),
+                    "Each SPARQL query must include the MEDIEVAL end year"
+            );
+        }
+    }
+
+    @Test
+    void fetchEvents_deduplicatesSameTitleAcrossQueries() {
+        WikidataService spy = Mockito.spy(new WikidataService());
+
+        EventCard duplicate = new EventCard();
+        duplicate.setTitle("Signing of the Magna Carta");
+        duplicate.setYear(1215);
+
+        doReturn(List.of(duplicate)).when(spy).runSparql(anyString());
+
+        List<EventCard> result = spy.fetchEvents(HistoricalEra.MEDIEVAL, 10);
+
+        long duplicateCount = result.stream()
+                .filter(c -> "Signing of the Magna Carta".equals(c.getTitle()))
+                .count();
+
+        assertEquals(1, duplicateCount, "Duplicate titles from multiple SPARQL sources should appear only once");
+    }
+
+    @Test
+    void fetchEvents_emptySparqlResults_fallsBackToCuratedCards() {
+        WikidataService spy = Mockito.spy(new WikidataService());
+        doReturn(List.of()).when(spy).runSparql(anyString());
+
+        List<EventCard> result = spy.fetchEvents(HistoricalEra.RENAISSANCE, 5);
+
+        assertNotNull(result);
+        assertFalse(result.isEmpty(), "If SPARQL returns nothing, curated cards should still provide results");
+        assertTrue(result.size() <= 5, "Result must still respect the requested limit");
+    }
+
+    @Test
+    void fetchEvents_resultContainsNoDuplicateTitles() {
+        WikidataService spy = Mockito.spy(new WikidataService());
+
+        EventCard a = new EventCard();
+        a.setTitle("Signing of the Magna Carta");
+        a.setYear(1215);
+
+        EventCard b = new EventCard();
+        b.setTitle("Signing of the Magna Carta");
+        b.setYear(1215);
+
+        EventCard c = new EventCard();
+        c.setTitle("Coronation of Charlemagne");
+        c.setYear(800);
+
+        doReturn(List.of(a, b, c)).when(spy).runSparql(anyString());
+
+        List<EventCard> result = spy.fetchEvents(HistoricalEra.MEDIEVAL, 10);
+
+        Set<String> uniqueTitles = result.stream()
+                .map(EventCard::getTitle)
+                .collect(Collectors.toSet());
+
+        assertEquals(
+                uniqueTitles.size(),
+                result.size(),
+                "Final fetchEvents result should not contain duplicate titles"
+        );
     }
 }
