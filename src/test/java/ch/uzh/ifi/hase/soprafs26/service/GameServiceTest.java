@@ -707,6 +707,7 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
 
         User user1 = new User();
         user1.setId(10L);
@@ -785,6 +786,7 @@ public class GameServiceTest {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
 
         User user1 = new User();
         user1.setId(10L);
@@ -1997,7 +1999,7 @@ public class GameServiceTest {
     }
 
     @Test
-    public void createRematchAndCloseOldGame_validInput_createsRematchAndClosesOldGame() {
+    public void createRematchAndCloseOldGame_validInput_createsRematchWithoutDeletingOldGame() {
         Game oldGame = new Game();
         oldGame.setId(1L);
         oldGame.setStatus("FINISHED");
@@ -2027,9 +2029,12 @@ public class GameServiceTest {
         Game result = gameService.createRematchAndCloseOldGame(1L, 10L);
 
         assertEquals(2L, result.getId());
-        verify(chatMessageRepository).deleteAllByGameId(1L);
-        verify(gameInviteRepository).deleteAllByGameId(1L);
-        verify(gameRepository).delete(oldGame);
+        assertEquals("WAITING", result.getStatus());
+        assertEquals(1L, result.getRematchFromGameId());
+
+        verify(chatMessageRepository, never()).deleteAllByGameId(1L);
+        verify(gameInviteRepository, never()).deleteAllByGameId(1L);
+        verify(gameRepository, never()).delete(oldGame);
     }
 
     @Test
@@ -2122,7 +2127,7 @@ public class GameServiceTest {
     }
 
     @Test
-    public void cleanupAbandonedGames_oldInProgressGame_deletesGame() {
+    public void cleanupAbandonedGames_oldInProgressGame_doesNotDeleteGame() {
         Game game = new Game();
         game.setId(1L);
         game.setStatus("IN_PROGRESS");
@@ -2132,9 +2137,9 @@ public class GameServiceTest {
 
         gameService.cleanupAbandonedGames();
 
-        verify(chatMessageRepository).deleteAllByGameId(1L);
-        verify(gameInviteRepository).deleteAllByGameId(1L);
-        verify(gameRepository).delete(game);
+        verify(chatMessageRepository, never()).deleteAllByGameId(1L);
+        verify(gameInviteRepository, never()).deleteAllByGameId(1L);
+        verify(gameRepository, never()).delete(game);
     }
 
     @Test

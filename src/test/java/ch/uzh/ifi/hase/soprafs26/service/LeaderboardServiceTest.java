@@ -51,7 +51,8 @@ public class LeaderboardServiceTest {
         user3.setTotalWins(7);
         user3.setTotalGamesPlayed(9);
 
-        when(userRepository.findAll()).thenReturn(Arrays.asList(user1, user2, user3));
+        when(userRepository.findAllByOrderByTotalPointsDescTotalWinsDescUsernameAsc())
+                .thenReturn(Arrays.asList(user2, user3, user1));
 
         List<LeaderboardEntryDTO> leaderboard = leaderboardService.getLeaderboard();
 
@@ -74,7 +75,8 @@ public class LeaderboardServiceTest {
 
     @Test
     public void getLeaderboard_emptyRepository_returnsEmptyList() {
-        when(userRepository.findAll()).thenReturn(List.of());
+        when(userRepository.findAllByOrderByTotalPointsDescTotalWinsDescUsernameAsc())
+                .thenReturn(List.of());
 
         List<LeaderboardEntryDTO> leaderboard = leaderboardService.getLeaderboard();
 
@@ -98,7 +100,8 @@ public class LeaderboardServiceTest {
         user2.setTotalWins(5);
         user2.setTotalGamesPlayed(8);
 
-        when(userRepository.findAll()).thenReturn(Arrays.asList(user2, user1));
+        when(userRepository.findAllByOrderByTotalPointsDescTotalWinsDescUsernameAsc())
+                .thenReturn(Arrays.asList(user1, user2));
 
         List<LeaderboardEntryDTO> leaderboard = leaderboardService.getLeaderboard();
 
