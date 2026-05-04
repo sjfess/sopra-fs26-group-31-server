@@ -154,15 +154,15 @@ public class GameController {
             @PathVariable Long gameId,
             @RequestBody PlaceMoveDTO placeMoveDTO) {
 
-        Object[] result = gameService.placeCard(
+        GameService.PlacementResult result = gameService.placeCard(
                 gameId,
                 placeMoveDTO.getCardIndex(),
                 placeMoveDTO.getPosition()
         );
 
-        EventCard card = (EventCard) result[0];
-        boolean correct = (boolean) result[1];
-        int timelineSize = (int) result[2];
+        EventCard card = result.card();
+        boolean correct = result.correct();
+        int timelineSize = result.timelineSize();
 
         PlacementResultDTO dto = new PlacementResultDTO();
         dto.setCorrect(correct);
@@ -260,5 +260,28 @@ public class GameController {
         }
 
         gameService.closeFinishedGame(gameId, requestDTO.getUserId());
+    }
+
+    @PostMapping("/games/{gameId}/history-uno/cards/{cardIndex}/play")
+    @ResponseStatus(HttpStatus.OK)
+    public Object[] playHistoryUnoCard(
+            @PathVariable Long gameId,
+            @PathVariable int cardIndex,
+            @RequestParam Long userId
+    ) {
+        return gameService.playHistoryUnoCard(gameId, userId, cardIndex);
+    }
+    @PostMapping("/games/{gameId}/history-uno/draw")
+    @ResponseStatus(HttpStatus.OK)
+    public HandCardDTO drawHistoryUnoCard(
+            @PathVariable Long gameId,
+            @RequestParam Long userId
+    ) {
+        return gameService.drawHistoryUnoCard(gameId, userId);
+    }
+    @GetMapping("/games/{gameId}/history-uno/discard-pile")
+    @ResponseStatus(HttpStatus.OK)
+    public List<EventCard> getHistoryUnoDiscardPile(@PathVariable Long gameId) {
+        return gameService.getHistoryUnoDiscardPile(gameId);
     }
 }
