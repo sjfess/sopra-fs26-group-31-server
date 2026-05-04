@@ -86,7 +86,7 @@ public class GameController {
     @ResponseBody
     public GameGetDTO startGame(
             @PathVariable Long gameId,
-            @RequestParam(value = "deckSize", defaultValue = "80") int deckSize) {
+            @RequestParam(value = "deckSize", defaultValue = "0") int deckSize) {
         Game game = gameService.startGame(gameId, deckSize);
         return toGameGetDTO(game);
     }
