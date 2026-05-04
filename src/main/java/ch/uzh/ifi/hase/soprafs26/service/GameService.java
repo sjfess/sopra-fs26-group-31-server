@@ -67,7 +67,7 @@ public class GameService {
     private static final int BASE_CORRECT_POINTS = 100;
     private static final int TIME_BONUS_PER_SECOND = 2;
     private static final int STREAK_BONUS_PER_STEP = 10;
-    private static final int INITIAL_HAND_SIZE = 1;
+    private static final int INITIAL_HAND_SIZE = 5;
     private static final int HISTORY_UNO_INITIAL_HAND_SIZE = 3;
     private static final int EXTRA_CARDS_PER_PLAYER_FOR_WRONG_PLACEMENTS = 5;
     private static final int MINIMUM_DECK_SIZE = 20;
