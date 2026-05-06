@@ -152,15 +152,17 @@ public class TimelineGameService {
             activePlayer.setScore(activePlayer.getScore() + BASE_CORRECT_POINTS + timeBonus + streakBonus);
             activePlayer.setCorrectPlacements(activePlayer.getCorrectPlacements() + 1);
             hand.remove(Integer.valueOf(cardIndex));
+            activePlayer.setHandIndicesJson(gameCardHelper.serializeHandIndices(hand));
+            activePlayer.setCardsInHand(hand.size());
         } else {
             activePlayer.setIncorrectPlacements(activePlayer.getIncorrectPlacements() + 1);
             activePlayer.setCorrectStreak(0);
             hand.remove(Integer.valueOf(cardIndex));
+            activePlayer.setHandIndicesJson(gameCardHelper.serializeHandIndices(hand));
+            activePlayer.setCardsInHand(hand.size());
             gameCardHelper.dealCardsToPlayer(activePlayer, game, 1);
         }
 
-        activePlayer.setHandIndicesJson(gameCardHelper.serializeHandIndices(hand));
-        activePlayer.setCardsInHand(hand.size());
         activePlayer.setCurrentCardIndex(null);
 
         if (isTimelineGameFinished(game)) {
@@ -188,9 +190,9 @@ public class TimelineGameService {
         if (game.getNextCardIndex() >= game.getDeckSize()) return true;
         List<GamePlayer> players = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
         for (GamePlayer player : players) {
-            if (player.getCardsInHand() != null && player.getCardsInHand() > 0) return true;
+            if (player.getCardsInHand() != null && player.getCardsInHand() > 0) return false;
         }
-        return false;
+        return true;
     }
 
     private Game findGameOrThrow(Long gameId) {

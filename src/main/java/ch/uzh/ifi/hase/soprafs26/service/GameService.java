@@ -11,6 +11,7 @@ import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
 import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.ChatMessageGetDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.GameInviteGetDTO;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.HandCardDTO;
 
 import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
 
@@ -146,6 +147,14 @@ public class GameService {
 
     public void deleteInvite(Long inviteId) {
         gameInviteService.deleteInvite(inviteId);
+    }
+
+    public EventCard getCard(Long gameId, int cardIndex) {
+        return timelineGameService.getCard(gameId, cardIndex);
+    }
+
+    public List<HandCardDTO> getHand(Long gameId, Long userId) {
+        return timelineGameService.getHand(gameId, userId);
     }
 
     @Scheduled(fixedDelay = 5000)
