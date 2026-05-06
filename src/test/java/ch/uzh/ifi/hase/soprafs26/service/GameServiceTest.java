@@ -12,8 +12,7 @@ import ch.uzh.ifi.hase.soprafs26.rest.dto.GamePlayerScoreDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.FinalResultDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
+import org.mockito.*;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 import ch.uzh.ifi.hase.soprafs26.repository.ChatMessageRepository;
@@ -30,7 +29,6 @@ import java.util.Collections;
 
 import static org.mockito.ArgumentMatchers.eq;
 
-import org.mockito.ArgumentCaptor;
 import static org.mockito.ArgumentMatchers.anyInt;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -39,30 +37,35 @@ import static org.mockito.Mockito.*;
 
 public class GameServiceTest {
 
-    private GameRepository gameRepository;
-    private GamePlayerRepository gamePlayerRepository;
-    private WikidataService wikidataService;
-    private GameService gameService;
-    private UserRepository userRepository;
-    private ChatMessageRepository chatMessageRepository;
-    private GameInviteRepository gameInviteRepository;
+    @Mock
+    private GameLobbyService gameLobbyService;
+
+    @Mock
+    private GameStartService gameStartService;
+
+    @Mock
+    private TimelineGameService timelineGameService;
+
+    @Mock
+    private GameInviteService gameInviteService;
+
+    @Mock
+    private GameChatService gameChatService;
+
+    @InjectMocks
+    private GameFinalizationService gameFinalizationService;
 
     @BeforeEach
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        gameRepository = Mockito.mock(GameRepository.class);
-        gamePlayerRepository = Mockito.mock(GamePlayerRepository.class);
-        wikidataService = Mockito.mock(WikidataService.class);
-        userRepository = Mockito.mock(UserRepository.class);
-        chatMessageRepository = Mockito.mock(ChatMessageRepository.class);
-        gameInviteRepository = Mockito.mock(GameInviteRepository.class);
+
         gameService = new GameService(
-                gameRepository,
-                gamePlayerRepository,
-                userRepository,
-                wikidataService,
-                chatMessageRepository,
-                gameInviteRepository
+                gameLobbyService,
+                gameStartService,
+                timelineGameService,
+                gameInviteService,
+                gameChatService,
+                gameFinalizationService
         );
 
         when(gameRepository.save(any(Game.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -228,7 +231,7 @@ public class GameServiceTest {
             c.setYear(1900 + i);
             deck.add(c);
         }
-        game.setDeckJson(gameService.serializeDeck(deck));
+        game.setDeckJson(gameCardHelper.serializeDeck(deck));
 
         User user1 = new User();
         user1.setId(10L);
@@ -300,8 +303,8 @@ public class GameServiceTest {
         extraCard.setTitle("Extra");
         extraCard.setYear(1700);
 
-        game.setDeckJson(gameService.serializeDeck(List.of(wrongCard, replacement, extraCard)));
-        game.setTimelineJson(gameService.serializeDeck(List.of(existingTimelineCard)));
+        game.setDeckJson(gameCardHelper.serializeDeck(List.of(wrongCard, replacement, extraCard)));
+        game.setTimelineJson(gameCardHelper.serializeDeck(List.of(existingTimelineCard)));
         game.setDeckSize(3);
         game.setNextCardIndex(1);
 
@@ -501,7 +504,7 @@ public class GameServiceTest {
         card1.setTitle("Berlin Wall");
         card1.setYear(1989);
 
-        game.setDeckJson(gameService.serializeDeck(List.of(card0, card1)));
+        game.setDeckJson(gameCardHelper.serializeDeck(List.of(card0, card1)));
 
         User user = new User();
         user.setId(10L);
@@ -543,7 +546,7 @@ public class GameServiceTest {
         c2.setTitle("B");
         c2.setYear(1500);
 
-        game.setDeckJson(gameService.serializeDeck(List.of(c1, c2)));
+        game.setDeckJson(gameCardHelper.serializeDeck(List.of(c1, c2)));
 
         User user = new User();
         user.setId(10L);
@@ -583,7 +586,7 @@ public class GameServiceTest {
         card2.setTitle("B");
         card2.setYear(1500);
 
-        game.setDeckJson(gameService.serializeDeck(List.of(card1, card2)));
+        game.setDeckJson(gameCardHelper.serializeDeck(List.of(card1, card2)));
 
         User user = new User();
         user.setId(10L);
@@ -619,7 +622,7 @@ public class GameServiceTest {
         EventCard card = new EventCard();
         card.setTitle("A");
         card.setYear(1000);
-        game.setDeckJson(gameService.serializeDeck(List.of(card)));
+        game.setDeckJson(gameCardHelper.serializeDeck(List.of(card)));
 
         User user = new User();
         user.setId(10L);
@@ -662,7 +665,7 @@ public class GameServiceTest {
             c.setYear(1900 + i);
             deck.add(c);
         }
-        game.setDeckJson(gameService.serializeDeck(deck));
+        game.setDeckJson(gameCardHelper.serializeDeck(deck));
 
         User user1 = new User();
         user1.setId(10L);
@@ -903,7 +906,7 @@ public class GameServiceTest {
         card10.setTitle("J");
         card10.setYear(1997);
 
-        game.setDeckJson(gameService.serializeDeck(List.of(card1, card2, card3, card4, card5, card6, card7, card8, card9, card10)));
+        game.setDeckJson(gameCardHelper.serializeDeck(List.of(card1, card2, card3, card4, card5, card6, card7, card8, card9, card10)));
 
         User user1 = new User();
         user1.setId(10L);
@@ -1015,7 +1018,7 @@ public class GameServiceTest {
         card1.setTitle("B");
         card1.setYear(1500);
 
-        game.setDeckJson(gameService.serializeDeck(List.of(card0, card1)));
+        game.setDeckJson(gameCardHelper.serializeDeck(List.of(card0, card1)));
 
         User user = new User();
         user.setId(10L);
@@ -1060,7 +1063,7 @@ public class GameServiceTest {
             c.setYear(1900 + i);
             deck.add(c);
         }
-        game.setDeckJson(gameService.serializeDeck(deck));
+        game.setDeckJson(gameCardHelper.serializeDeck(deck));
 
         User user1 = new User();
         user1.setId(10L);
@@ -1198,7 +1201,7 @@ public class GameServiceTest {
         EventCard card = new EventCard();
         card.setTitle("A");
         card.setYear(1000);
-        game.setDeckJson(gameService.serializeDeck(List.of(card)));
+        game.setDeckJson(gameCardHelper.serializeDeck(List.of(card)));
 
         User user = new User();
         user.setId(10L);
@@ -1446,7 +1449,7 @@ public class GameServiceTest {
                 .filter(g -> g.getTimelineJson() != null && !g.getTimelineJson().equals("[]"))
                 .findFirst().orElseThrow();
 
-        List<EventCard> timeline = gameService.deserializeDeck(saved.getTimelineJson());
+        List<EventCard> timeline = gameCardHelper.deserializeDeck(saved.getTimelineJson());
         assertEquals(1, timeline.size());
         assertEquals("Seeded Card", timeline.get(0).getTitle());
     }
@@ -1555,7 +1558,7 @@ public class GameServiceTest {
                 .filter(g -> g.getTimelineJson() != null && !g.getTimelineJson().equals("[]"))
                 .findFirst().orElseThrow();
 
-        List<EventCard> timeline = gameService.deserializeDeck(saved.getTimelineJson());
+        List<EventCard> timeline = gameCardHelper.deserializeDeck(saved.getTimelineJson());
         assertEquals(3, timeline.size());
     }
 
@@ -1614,7 +1617,7 @@ public class GameServiceTest {
                 .filter(g -> g.getTimelineJson() != null && !g.getTimelineJson().equals("[]"))
                 .findFirst().orElseThrow();
 
-        List<EventCard> timeline = gameService.deserializeDeck(saved.getTimelineJson());
+        List<EventCard> timeline = gameCardHelper.deserializeDeck(saved.getTimelineJson());
         assertEquals(5, timeline.size());
     }
 
@@ -1669,7 +1672,7 @@ public class GameServiceTest {
                 .filter(g -> g.getDeckJson() != null)
                 .findFirst().orElseThrow();
 
-        List<EventCard> deck = gameService.deserializeDeck(saved.getDeckJson());
+        List<EventCard> deck = gameCardHelper.deserializeDeck(saved.getDeckJson());
         assertTrue(deck.stream().noneMatch(c -> c.getTitle().equals("Seeded Card")));
         assertTrue(deck.stream().anyMatch(c -> c.getTitle().equals("Regular Card")));
     }
@@ -1728,7 +1731,7 @@ public class GameServiceTest {
                 .filter(g -> g.getTimelineJson() != null && !g.getTimelineJson().equals("[]"))
                 .findFirst().orElseThrow();
 
-        List<EventCard> timeline = gameService.deserializeDeck(saved.getTimelineJson());
+        List<EventCard> timeline = gameCardHelper.deserializeDeck(saved.getTimelineJson());
         assertEquals(1776, timeline.get(0).getYear());
         assertEquals(1850, timeline.get(1).getYear());
         assertEquals(1900, timeline.get(2).getYear());
@@ -2293,8 +2296,8 @@ public class GameServiceTest {
 
         Game startedGame = gameService.startGame(1L, 10);
 
-        List<EventCard> finalDeck = gameService.deserializeDeck(startedGame.getDeckJson());
-        List<EventCard> timeline = gameService.deserializeDeck(startedGame.getTimelineJson());
+        List<EventCard> finalDeck = gameCardHelper.deserializeDeck(startedGame.getDeckJson());
+        List<EventCard> timeline = gameCardHelper.deserializeDeck(startedGame.getTimelineJson());
 
         assertEquals("IN_PROGRESS", startedGame.getStatus());
         assertEquals(20, startedGame.getDeckSize());
