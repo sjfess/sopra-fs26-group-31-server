@@ -4,8 +4,10 @@ import ch.uzh.ifi.hase.soprafs26.constant.Difficulty;
 import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
 import ch.uzh.ifi.hase.soprafs26.entity.EventCard;
 import ch.uzh.ifi.hase.soprafs26.entity.Game;
+import ch.uzh.ifi.hase.soprafs26.rest.dto.HandCardDTO;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.*;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -27,9 +29,11 @@ public class GameServiceTest {
 
     private GameService gameService;
 
+    private AutoCloseable mocks;
+
     @BeforeEach
     public void setup() {
-        MockitoAnnotations.openMocks(this);
+        mocks = MockitoAnnotations.openMocks(this);
         gameService = new GameService(
                 gameLobbyService,
                 gameStartService,
@@ -38,6 +42,11 @@ public class GameServiceTest {
                 gameChatService,
                 gameFinalizationService
         );
+    }
+
+    @AfterEach
+    void tearDown() throws Exception {
+        mocks.close();
     }
 
     // ── Lobby ────────────────────────────────────────────────────────────
@@ -241,5 +250,25 @@ public class GameServiceTest {
     void deleteInvite_delegatesToGameInviteService() {
         gameService.deleteInvite(1L);
         verify(gameInviteService).deleteInvite(1L);
+    }
+
+    /** card delegetion tests */
+
+    @Test
+    void getCard_delegatesToTimelineGameService() {
+        EventCard card = new EventCard();
+        when(timelineGameService.getCard(1L, 3)).thenReturn(card);
+        EventCard result = gameService.getCard(1L, 3);
+        assertSame(card, result);
+        verify(timelineGameService).getCard(1L, 3);
+    }
+
+    @Test
+    void getHand_delegatesToTimelineGameService() {
+        List<HandCardDTO> hand = List.of(new HandCardDTO());
+        when(timelineGameService.getHand(1L, 2L)).thenReturn(hand);
+        List<HandCardDTO> result = gameService.getHand(1L, 2L);
+        assertSame(hand, result);
+        verify(timelineGameService).getHand(1L, 2L);
     }
 }

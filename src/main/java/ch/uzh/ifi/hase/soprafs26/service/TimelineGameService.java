@@ -154,7 +154,8 @@ public class TimelineGameService {
             hand.remove(Integer.valueOf(cardIndex));
             activePlayer.setHandIndicesJson(gameCardHelper.serializeHandIndices(hand));
             activePlayer.setCardsInHand(hand.size());
-        } else {
+        }
+        else {
             activePlayer.setIncorrectPlacements(activePlayer.getIncorrectPlacements() + 1);
             activePlayer.setCorrectStreak(0);
             hand.remove(Integer.valueOf(cardIndex));
@@ -164,15 +165,14 @@ public class TimelineGameService {
         }
 
         activePlayer.setCurrentCardIndex(null);
-
+        gamePlayerRepository.save(activePlayer);
+        gameRepository.save(game);
         if (isTimelineGameFinished(game)) {
             activePlayer.setActiveTurn(false);
-            gamePlayerRepository.save(activePlayer);
-            gameRepository.save(game);
+
             gameFinalizationService.finalizeGame(gameId);
-        } else {
-            gamePlayerRepository.save(activePlayer);
-            gameRepository.save(game);
+        }
+        else {
             advanceTurn(game, activePlayer);
             gameRepository.save(game);
         }
@@ -187,12 +187,16 @@ public class TimelineGameService {
 
     boolean isTimelineGameFinished(Game game) {
         if (game.getGameMode() != GameMode.TIMELINE) return false;
+
+
         if (game.getNextCardIndex() >= game.getDeckSize()) return true;
+
         List<GamePlayer> players = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
         for (GamePlayer player : players) {
-            if (player.getCardsInHand() != null && player.getCardsInHand() > 0) return false;
+            if (player.getCardsInHand() != null && player.getCardsInHand() == 0) return true;
         }
-        return true;
+
+        return false;
     }
 
     private Game findGameOrThrow(Long gameId) {
@@ -207,6 +211,7 @@ public class TimelineGameService {
                     "Game is " + game.getStatus() + ", not IN_PROGRESS");
         }
     }
+
     void advanceTurn(Game game, GamePlayer currentPlayer) {
         List<GamePlayer> players = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
 
@@ -267,6 +272,7 @@ public class TimelineGameService {
         Game game = gameStartService.findGameOrThrow(gameId);
         return gameCardHelper.deserializeDeck(game.getDeckJson());
     }
+
     public List<GamePlayerScoreDTO> getLiveScores(Long gameId) {
         Game game = gameStartService.findGameOrThrow(gameId);
 

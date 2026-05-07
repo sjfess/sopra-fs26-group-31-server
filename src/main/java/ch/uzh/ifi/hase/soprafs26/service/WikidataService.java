@@ -2,6 +2,7 @@ package ch.uzh.ifi.hase.soprafs26.service;
 
 import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
 import ch.uzh.ifi.hase.soprafs26.entity.EventCard;
+import ch.uzh.ifi.hase.soprafs26.repository.EventCardRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,27 +20,17 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
-/**
- * Fetches historical event data from Wikidata SPARQL and converts it into EventCard objects.
- *
- * KEY OPTIMIZATION: All 4 SPARQL queries run in PARALLEL via CompletableFuture,
- * reducing total fetch time from ~16s (sequential) to ~4s (parallel).
- *
- * Results are cached with @Cacheable so repeated calls for the same era/limit
- * are served instantly without hitting Wikidata again.
- */
 @Service
 public class WikidataService {
 
     private static final Logger log = LoggerFactory.getLogger(WikidataService.class);
     private static final String SPARQL_ENDPOINT = "https://query.wikidata.org/sparql";
 
-    // Query 1: NON-MILITARY point-in-time events (P585)
     private static final String EVENTS_QUERY = """
             #%s
             SELECT DISTINCT ?event ?eventLabel (YEAR(?date) AS ?year) ?image WHERE {
@@ -65,7 +56,6 @@ public class WikidataService {
             LIMIT %d
             """;
 
-    // Query 2: wars & revolutions (P580)
     private static final String START_DATE_QUERY = """
             #%s
             SELECT DISTINCT ?event ?eventLabel (YEAR(?date) AS ?year) ?image WHERE {
@@ -81,7 +71,6 @@ public class WikidataService {
             LIMIT %d
             """;
 
-    // Query 3: notable "historical event" items (Q13418847)
     private static final String HISTORICAL_EVENT_QUERY = """
             #%s
             SELECT DISTINCT ?event ?eventLabel (YEAR(?date) AS ?year) ?image WHERE {
@@ -96,7 +85,6 @@ public class WikidataService {
             LIMIT %d
             """;
 
-    // Query 4: cultural, scientific & religious events
     private static final String CULTURAL_QUERY = """
             #%s
             SELECT DISTINCT ?event ?eventLabel (YEAR(?date) AS ?year) ?image WHERE {
@@ -120,8 +108,14 @@ public class WikidataService {
 
     private final RestClient restClient;
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
+    private final EventCardRepository eventCardRepository;  // NEU
 
-    public WikidataService() {
+    // =========================================================================
+    // Konstruktor — NEU: EventCardRepository injiziert
+    // =========================================================================
+
+    public WikidataService(EventCardRepository eventCardRepository) {
+        this.eventCardRepository = eventCardRepository;
         this.restClient = RestClient.builder()
                 .baseUrl(SPARQL_ENDPOINT)
                 .defaultHeader("Accept", "application/json")
@@ -134,50 +128,74 @@ public class WikidataService {
     // =========================================================================
 
     /**
-     * Fetches historical events for the given era.
-     * All 4 SPARQL queries run in parallel → ~4s instead of ~16s.
-     * Results are cached per era+limit combination.
+     * Layer 1: Caffeine In-Memory Cache (@Cacheable) — 0ms
+     * Layer 2: Datenbank (existsByEra / findByEra) — ~5ms
+     * Layer 3: Wikidata API (nur beim allerersten Aufruf) — ~20s
      */
-    @Cacheable(value = "eventCards", key = "#era.name() + '_' + #limit")
-    public List<EventCard> fetchEvents(HistoricalEra era, int limit) {
-        log.info("Fetching {} events for era {} ({}-{})", limit, era, era.getStartYear(), era.getEndYear());
+// Diese Methode wird gecacht — gibt IMMER die grosse Liste zurück
+    @Cacheable(value = "eventCards", key = "#era.name()")
+    public List<EventCard> getCachedCards(HistoricalEra era) {
 
-        String cacheBuster = UUID.randomUUID().toString();
+        if (eventCardRepository.existsByEra(era)) {
+            List<EventCard> cached = eventCardRepository.findByEra(era);
+            log.info("Serving {} cards for era {} from DATABASE", cached.size(), era);
+            return cached;
+        }
+
+        log.info("No DB cache for era {}. Fetching from Wikidata...", era);
+        List<EventCard> fresh = fetchFromWikidata(era, 300);
+        fresh.forEach(card -> card.setEra(era));
+        eventCardRepository.saveAll(fresh);
+        log.info("Saved {} cards for era {} to database", fresh.size(), era);
+        return fresh;
+    }
+
+    // Diese Methode wird NICHT gecacht — shuffelt und limitiert jedes Mal neu
+    public List<EventCard> fetchEvents(HistoricalEra era, int limit) {
+        List<EventCard> allCards = new ArrayList<>(getCachedCards(era));
+        Collections.shuffle(allCards);
+        return allCards.stream().limit(limit).collect(Collectors.toList());
+    }
+
+    // =========================================================================
+    // Private Wikidata fetch — euer bisheriger fetchEvents()-Code, nur
+    // cacheBuster → era.name() geändert (Schritt 1)
+    // =========================================================================
+
+    private List<EventCard> fetchFromWikidata(HistoricalEra era, int limit) {
+        String tag = era.name();
         int q2Limit = Math.max(8, (int) (limit * BATTLE_CAP));
 
-        // Launch all 4 queries in parallel
         CompletableFuture<List<EventCard>> f1 = CompletableFuture.supplyAsync(() -> {
             try {
-                return runSparql(String.format(EVENTS_QUERY, cacheBuster,
+                return runSparql(String.format(EVENTS_QUERY, tag,
                         era.getStartYear(), era.getEndYear(), limit * 5));
             } catch (Exception e) { log.warn("Query1 failed: {}", e.getMessage()); return List.of(); }
         }, executor);
 
         CompletableFuture<List<EventCard>> f2 = CompletableFuture.supplyAsync(() -> {
             try {
-                return runSparql(String.format(START_DATE_QUERY, cacheBuster,
+                return runSparql(String.format(START_DATE_QUERY, tag,
                         era.getStartYear(), era.getEndYear(), q2Limit));
             } catch (Exception e) { log.warn("Query2 failed: {}", e.getMessage()); return List.of(); }
         }, executor);
 
         CompletableFuture<List<EventCard>> f3 = CompletableFuture.supplyAsync(() -> {
             try {
-                return runSparql(String.format(HISTORICAL_EVENT_QUERY, cacheBuster,
+                return runSparql(String.format(HISTORICAL_EVENT_QUERY, tag,
                         era.getStartYear(), era.getEndYear(), limit * 3));
             } catch (Exception e) { log.warn("Query3 failed: {}", e.getMessage()); return List.of(); }
         }, executor);
 
         CompletableFuture<List<EventCard>> f4 = CompletableFuture.supplyAsync(() -> {
             try {
-                return runSparql(String.format(CULTURAL_QUERY, cacheBuster,
+                return runSparql(String.format(CULTURAL_QUERY, tag,
                         era.getStartYear(), era.getEndYear(), limit * 3));
             } catch (Exception e) { log.warn("Query4 failed: {}", e.getMessage()); return List.of(); }
         }, executor);
 
-        // Wait for all 4 (total time = slowest single query, not sum)
         CompletableFuture.allOf(f1, f2, f3, f4).join();
 
-        // Collect & deduplicate
         Set<String> seenGlobal = new HashSet<>();
         List<EventCard> q1Pool = new ArrayList<>();
         List<EventCard> q2Pool = new ArrayList<>();
@@ -191,21 +209,18 @@ public class WikidataService {
 
         log.info("Pool sizes – Q1:{} Q2:{} Q3:{} Q4:{}", q1Pool.size(), q2Pool.size(), q3Pool.size(), q4Pool.size());
 
-        // Curated cards
-        Set<String> seenCurated = new HashSet<>();
         List<EventCard> curatedPool = new ArrayList<>();
+        Set<String> seenCurated = new HashSet<>();
         for (EventCard c : getCuratedCards(era)) {
             if (seenCurated.add(c.getTitle().toLowerCase())) curatedPool.add(c);
         }
 
-        // Shuffle all pools
         Collections.shuffle(q1Pool);
         Collections.shuffle(q2Pool);
         Collections.shuffle(q3Pool);
         Collections.shuffle(q4Pool);
         Collections.shuffle(curatedPool);
 
-        // Era-based weighting
         double q1Weight, q2Weight, q3Weight, q4Weight;
         if (era == HistoricalEra.ANCIENT) {
             q1Weight = 0.15; q2Weight = 0.05; q3Weight = 0.40; q4Weight = 0.40;
@@ -226,23 +241,20 @@ public class WikidataService {
             }
         };
 
-        // Priority: cultural & historical first, wars last
         addUpTo.accept(q4Pool, (int)(limit * q4Weight));
         addUpTo.accept(q3Pool, (int)(limit * q3Weight));
         addUpTo.accept(q1Pool, (int)(limit * q1Weight));
         addUpTo.accept(q2Pool, (int)(limit * q2Weight));
 
-        // Filler
         List<EventCard> fallback = new ArrayList<>();
         fallback.addAll(q4Pool); fallback.addAll(q3Pool);
-        fallback.addAll(q4Pool); fallback.addAll(q1Pool); fallback.addAll(q2Pool);
+        fallback.addAll(q1Pool); fallback.addAll(q2Pool);
         Collections.shuffle(fallback);
         for (EventCard c : fallback) {
             if (merged.size() >= limit) break;
             if (seen.add(c.getTitle().toLowerCase())) merged.add(c);
         }
 
-        // Insert curated cards
         int gap = Math.max(0, limit - merged.size());
         int curatedLimit = Math.min(curatedPool.size(), Math.max(gap, 3));
         log.info("SPARQL produced {} cards, inserting up to {} curated", merged.size(), curatedLimit);
@@ -263,7 +275,7 @@ public class WikidataService {
     }
 
     // =========================================================================
-    // SPARQL call
+    // SPARQL call — unverändert
     // =========================================================================
 
     List<EventCard> runSparql(String sparql) {
@@ -285,7 +297,7 @@ public class WikidataService {
     }
 
     // =========================================================================
-    // Diversity filter
+    // Diversity filter — unverändert
     // =========================================================================
 
     private List<EventCard> applyDiversityFilter(List<EventCard> cards, int limit) {
@@ -338,13 +350,12 @@ public class WikidataService {
     }
 
     // =========================================================================
-    // Curated cards
+    // Curated cards — unverändert
     // =========================================================================
 
     public List<EventCard> getCuratedCards(HistoricalEra era) {
         List<EventCard> all = new ArrayList<>();
 
-        // Ancient
         add(all, "Construction of the Great Pyramid of Giza", -2560, null);
         add(all, "Hammurabi's Code of Laws", -1754, null);
         add(all, "Founding of Rome (traditional date)", -753, null);
@@ -376,8 +387,6 @@ public class WikidataService {
         add(all, "Construction of the Colosseum in Rome", 80, null);
         add(all, "Splitting of the Roman Empire", 395, null);
         add(all, "Fall of the Western Roman Empire", 476, null);
-
-        // Medieval
         add(all, "Birth of Muhammad (Prophet of Islam)", 570, null);
         add(all, "Coronation of Charlemagne", 800, null);
         add(all, "Birth of Genghis Khan", 1162, null);
@@ -400,8 +409,6 @@ public class WikidataService {
         add(all, "Foundation of the Aztec capital Tenochtitlan", 1325, null);
         add(all, "Mongol Empire reaches its greatest extent", 1279, null);
         add(all, "Great Schism between Eastern and Western Churches", 1054, null);
-
-        // Renaissance
         add(all, "Birth of Joan of Arc", 1412, null);
         add(all, "Gutenberg invents the Printing Press", 1440, null);
         add(all, "Birth of Leonardo da Vinci", 1452, null);
@@ -426,8 +433,6 @@ public class WikidataService {
         add(all, "Birth of Martin Luther", 1483, null);
         add(all, "Birth of Henry VIII of England", 1491, null);
         add(all, "Birth of Suleiman the Magnificent", 1494, null);
-
-        // Modern
         add(all, "Birth of Isaac Newton", 1643, null);
         add(all, "Birth of Johann Sebastian Bach", 1685, null);
         add(all, "Birth of Wolfgang Amadeus Mozart", 1756, null);
@@ -458,8 +463,6 @@ public class WikidataService {
         add(all, "Emancipation Proclamation by Lincoln", 1863, null);
         add(all, "Meiji Restoration in Japan", 1868, null);
         add(all, "First modern Olympic Games in Athens", 1896, null);
-
-        // Information Age
         add(all, "Wright Brothers First Flight", 1903, null);
         add(all, "Sinking of the Titanic", 1912, null);
         add(all, "Discovery of Penicillin (Alexander Fleming)", 1928, null);
@@ -488,7 +491,7 @@ public class WikidataService {
     }
 
     // =========================================================================
-    // SPARQL response parser
+    // SPARQL response parser — unverändert
     // =========================================================================
 
     private List<EventCard> parseSparqlResponse(String json) {

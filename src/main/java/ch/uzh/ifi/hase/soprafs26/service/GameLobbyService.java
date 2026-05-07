@@ -11,7 +11,6 @@ import ch.uzh.ifi.hase.soprafs26.rest.dto.GameSettingsPutDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -40,7 +39,7 @@ public class GameLobbyService {
     private final ChatMessageRepository chatMessageRepository;
     private final GameInviteRepository gameInviteRepository;
     private final Random random = new Random();
-    private final Logger log = LoggerFactory.getLogger(GameService.class);
+    private final Logger log = LoggerFactory.getLogger(GameLobbyService.class);
     private final GameFinalizationService gameFinalizationService;
     private final GameStartService gameStartService;
     private final TimelineGameService timelineGameService;
