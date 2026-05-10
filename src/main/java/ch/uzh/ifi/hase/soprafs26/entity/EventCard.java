@@ -2,6 +2,10 @@ package ch.uzh.ifi.hase.soprafs26.entity;
 
 import jakarta.persistence.*;
 import java.io.Serializable;
+import ch.uzh.ifi.hase.soprafs26.constant.HistoricalEra;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+
 
 /**
  * Represents a historical event card used in the game.
@@ -23,11 +27,15 @@ public class EventCard implements Serializable {
     @Column(name = "event_year", nullable = false)
     private int year;
 
-    @Column
+    @Column(length = 1000)
     private String imageUrl;
 
     @Column
-    private String wikidataId; // e.g. "Q178561"
+    private String wikidataId;
+
+    @Column
+    @Enumerated(EnumType.STRING)
+    private HistoricalEra era;
 
     // Getters and Setters
 
@@ -69,5 +77,12 @@ public class EventCard implements Serializable {
 
     public void setWikidataId(String wikidataId) {
         this.wikidataId = wikidataId;
+    }
+
+    public HistoricalEra getEra() {
+        return era;
+    }
+    public void setEra(HistoricalEra era) {
+        this.era = era;
     }
 }

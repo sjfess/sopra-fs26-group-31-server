@@ -261,27 +261,6 @@ public class GameController {
 
         gameService.closeFinishedGame(gameId, requestDTO.getUserId());
     }
-
-    @PostMapping("/games/{gameId}/history-uno/cards/{cardIndex}/play")
-    @ResponseStatus(HttpStatus.OK)
-    public Object[] playHistoryUnoCard(
-            @PathVariable Long gameId,
-            @PathVariable int cardIndex,
-            @RequestParam Long userId
-    ) {
-        return gameService.playHistoryUnoCard(gameId, userId, cardIndex);
-    }
-    @PostMapping("/games/{gameId}/history-uno/draw")
-    @ResponseStatus(HttpStatus.OK)
-    public HandCardDTO drawHistoryUnoCard(
-            @PathVariable Long gameId,
-            @RequestParam Long userId
-    ) {
-        return gameService.drawHistoryUnoCard(gameId, userId);
-    }
-    @GetMapping("/games/{gameId}/history-uno/discard-pile")
-    @ResponseStatus(HttpStatus.OK)
-    public List<EventCard> getHistoryUnoDiscardPile(@PathVariable Long gameId) {
-        return gameService.getHistoryUnoDiscardPile(gameId);
-    }
 }
+
+
