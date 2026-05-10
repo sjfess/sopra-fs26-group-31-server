@@ -8,6 +8,8 @@ public class LeaderboardEntryDTO {
     private Integer totalPoints;
     private Integer totalWins;
     private Integer totalGamesPlayed;
+    private Integer totalCorrectPlacements;
+    private Integer totalIncorrectPlacements;
 
     public Integer getRank() {
         return rank;
@@ -55,5 +57,21 @@ public class LeaderboardEntryDTO {
 
     public void setTotalGamesPlayed(Integer totalGamesPlayed) {
         this.totalGamesPlayed = totalGamesPlayed;
+    }
+
+    public Integer getTotalCorrectPlacements() {
+        return totalCorrectPlacements;
+    }
+
+    public void setTotalCorrectPlacements(Integer totalCorrectPlacements) {
+        this.totalCorrectPlacements = totalCorrectPlacements;
+    }
+
+    public Integer getTotalIncorrectPlacements() {
+        return totalIncorrectPlacements;
+    }
+
+    public void setTotalIncorrectPlacements(Integer totalIncorrectPlacements) {
+        this.totalIncorrectPlacements = totalIncorrectPlacements;
     }
 }
