@@ -19,7 +19,7 @@ import java.util.List;
 @Transactional
 public class AuthService {
 
-    private static final Duration PRESENCE_TIMEOUT = Duration.ofSeconds(15);
+    private static final Duration PRESENCE_TIMEOUT = Duration.ofSeconds(90);
 
     private final UserRepository userRepository;
 
