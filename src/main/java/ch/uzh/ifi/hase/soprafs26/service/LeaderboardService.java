@@ -52,6 +52,8 @@ public class LeaderboardService {
             entry.setTotalPoints(nullToZero(user.getTotalPoints()));
             entry.setTotalWins(nullToZero(user.getTotalWins()));
             entry.setTotalGamesPlayed(nullToZero(user.getTotalGamesPlayed()));
+            entry.setTotalCorrectPlacements(nullToZero(user.getTotalCorrectPlacements()));
+            entry.setTotalIncorrectPlacements(nullToZero(user.getTotalIncorrectPlacements()));
 
             leaderboard.add(entry);
         }
