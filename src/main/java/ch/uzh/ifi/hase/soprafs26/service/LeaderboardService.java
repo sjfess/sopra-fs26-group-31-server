@@ -4,11 +4,12 @@ import ch.uzh.ifi.hase.soprafs26.entity.User;
 import ch.uzh.ifi.hase.soprafs26.repository.UserRepository;
 import ch.uzh.ifi.hase.soprafs26.rest.dto.LeaderboardEntryDTO;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -22,14 +23,23 @@ public class LeaderboardService {
     }
 
     public List<LeaderboardEntryDTO> getLeaderboard() {
-        List<User> users = new ArrayList<>(userRepository.findAll());
+        List<User> users = userRepository.findAllByOrderByTotalPointsDescTotalWinsDescUsernameAsc();
+        return convertUsersToLeaderboard(users);
+    }
 
-        users.sort(
-                Comparator.comparing(User::getTotalPoints, Comparator.nullsFirst(Comparator.reverseOrder()))
-                        .thenComparing(User::getTotalWins, Comparator.nullsFirst(Comparator.reverseOrder()))
-                        .thenComparing(User::getUsername, Comparator.nullsFirst(String::compareTo))
-        );
+    public LeaderboardEntryDTO getLeaderboardEntryForUser(Long userId) {
+        List<LeaderboardEntryDTO> leaderboard = getLeaderboard();
 
+        return leaderboard.stream()
+                .filter(entry -> entry.getUserId().equals(userId))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "User with id " + userId + " was not found in leaderboard"
+                ));
+    }
+
+    private List<LeaderboardEntryDTO> convertUsersToLeaderboard(List<User> users) {
         List<LeaderboardEntryDTO> leaderboard = new ArrayList<>();
 
         for (int i = 0; i < users.size(); i++) {
@@ -39,13 +49,19 @@ public class LeaderboardService {
             entry.setRank(i + 1);
             entry.setUserId(user.getId());
             entry.setUsername(user.getUsername());
-            entry.setTotalPoints(user.getTotalPoints());
-            entry.setTotalWins(user.getTotalWins());
-            entry.setTotalGamesPlayed(user.getTotalGamesPlayed());
+            entry.setTotalPoints(nullToZero(user.getTotalPoints()));
+            entry.setTotalWins(nullToZero(user.getTotalWins()));
+            entry.setTotalGamesPlayed(nullToZero(user.getTotalGamesPlayed()));
+            entry.setTotalCorrectPlacements(nullToZero(user.getTotalCorrectPlacements()));
+            entry.setTotalIncorrectPlacements(nullToZero(user.getTotalIncorrectPlacements()));
 
             leaderboard.add(entry);
         }
 
         return leaderboard;
+    }
+
+    private int nullToZero(Integer value) {
+        return value != null ? value : 0;
     }
 }

@@ -20,6 +20,7 @@ public class GameGetDTO {
     private Difficulty difficulty;
     private GameMode gameMode;
     private int maxPlayers;
+    private int nextCardIndex;
 
     public Difficulty getDifficulty() { return difficulty; }
     public void setDifficulty(Difficulty difficulty) { this.difficulty = difficulty; }
@@ -59,4 +60,7 @@ public class GameGetDTO {
 
     public int getMaxPlayers() { return maxPlayers; }
     public void setMaxPlayers(int maxPlayers) { this.maxPlayers = maxPlayers; }
+
+    public int getNextCardIndex(){return nextCardIndex;}
+    public void setNextCardIndex(int nextCardIndex){this.nextCardIndex = nextCardIndex;}
 }
