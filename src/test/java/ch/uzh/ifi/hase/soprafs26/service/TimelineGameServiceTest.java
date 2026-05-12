@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.web.server.ResponseStatusException;
+import java.util.ArrayList;
 
 import java.time.Instant;
 import java.util.List;
@@ -392,5 +393,282 @@ public class TimelineGameServiceTest {
 
         assertEquals(1, result.size());
         assertSame(card, result.get(0));
+    }
+
+    /** placeCard guard-clause tests */
+
+    @Test
+    void placeCard_gameNotFound_throwsNotFound() {
+        when(gameRepository.findById(99L)).thenReturn(Optional.empty());
+        assertThrows(ResponseStatusException.class,
+                () -> timelineGameService.placeCard(99L, 0, 0));
+    }
+
+    @Test
+    void placeCard_gameNotInProgress_throwsConflict() {
+        Game game = new Game();
+        game.setStatus("WAITING");
+        game.setGameMode(GameMode.TIMELINE);
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        assertThrows(ResponseStatusException.class,
+                () -> timelineGameService.placeCard(1L, 0, 0));
+    }
+
+    @Test
+    void placeCard_wrongGameMode_throwsConflict() {
+        Game game = new Game();
+        game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.HISTORY_UNO);
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        assertThrows(ResponseStatusException.class,
+                () -> timelineGameService.placeCard(1L, 0, 0));
+    }
+
+    @Test
+    void placeCard_noActivePlayer_throwsConflict() {
+        Game game = new Game();
+        game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.empty());
+        assertThrows(ResponseStatusException.class,
+                () -> timelineGameService.placeCard(1L, 0, 0));
+    }
+
+    @Test
+    void placeCard_noCardSelected_throwsConflict() {
+        Game game = new Game();
+        game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
+        GamePlayer player = new GamePlayer();
+        player.setCurrentCardIndex(null);
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(player));
+        assertThrows(ResponseStatusException.class,
+                () -> timelineGameService.placeCard(1L, 0, 0));
+    }
+
+    @Test
+    void placeCard_wrongCardSelected_throwsConflict() {
+        Game game = new Game();
+        game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
+        GamePlayer player = new GamePlayer();
+        player.setCurrentCardIndex(3); // drew card 3
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(player));
+        assertThrows(ResponseStatusException.class,
+                () -> timelineGameService.placeCard(1L, 0, 0)); // trying to place card 0
+    }
+
+    @Test
+    void placeCard_cardNotInHand_throwsConflict() {
+        Game game = new Game();
+        game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
+        game.setDeckJson("[]");
+        GamePlayer player = new GamePlayer();
+        player.setCurrentCardIndex(0);
+        player.setHandIndicesJson("[1]");
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(player));
+        when(gameCardHelper.deserializeHandIndices("[1]")).thenReturn(List.of(1)); // hand has 1, not 0
+        assertThrows(ResponseStatusException.class,
+                () -> timelineGameService.placeCard(1L, 0, 0));
+    }
+
+    @Test
+    void placeCard_cardIndexOutOfRange_throwsNotFound() {
+        Game game = new Game();
+        game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
+        game.setDeckJson("[]");
+        GamePlayer player = new GamePlayer();
+        player.setCurrentCardIndex(5);
+        player.setHandIndicesJson("[5]");
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(player));
+        when(gameCardHelper.deserializeHandIndices("[5]")).thenReturn(List.of(5));
+        when(gameCardHelper.deserializeDeck(game.getDeckJson())).thenReturn(List.of()); // empty deck
+        assertThrows(ResponseStatusException.class,
+                () -> timelineGameService.placeCard(1L, 5, 0));
+    }
+
+    @Test
+    void placeCard_positionOutOfRange_throwsBadRequest() {
+        Game game = new Game();
+        game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
+        game.setDeckJson("[]");
+        game.setTimelineJson("[]");
+        EventCard card = new EventCard(); card.setYear(1900);
+        GamePlayer player = new GamePlayer();
+        player.setCurrentCardIndex(0);
+        player.setHandIndicesJson("[0]");
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(player));
+        when(gameCardHelper.deserializeHandIndices("[0]")).thenReturn(List.of(0));
+        when(gameCardHelper.deserializeDeck(game.getDeckJson())).thenReturn(List.of(card));
+        when(gameCardHelper.deserializeDeck(game.getTimelineJson())).thenReturn(List.of()); // empty timeline
+        assertThrows(ResponseStatusException.class,
+                () -> timelineGameService.placeCard(1L, 0, 5)); // position 5 > timeline.size() 0
+    }
+
+    /** placeCard known input: correct placement */
+
+    @Test
+    void placeCard_correctPlacement_updatesScoreAndTimeline() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
+        game.setDeckJson("[]");
+        game.setTimelineJson("[]");
+        game.setDeckSize(10);
+        game.setNextCardIndex(3);
+
+        EventCard card = new EventCard(); card.setTitle("Event A"); card.setYear(1500);
+
+        GamePlayer player = new GamePlayer();
+        player.setId(1L);
+        player.setCurrentCardIndex(0);
+        player.setHandIndicesJson("[0]");
+        player.setScore(0);
+        player.setCorrectStreak(0);
+        player.setCorrectPlacements(0);
+        player.setIncorrectPlacements(0);
+        player.setCardsInHand(1);
+        player.setTurnStartedAt(Instant.now());
+        player.setActiveTurn(true);
+        player.setBestStreak(0);
+
+        // timeline has one card before position 0 — place at position 1 (after it)
+        EventCard existing = new EventCard(); existing.setYear(1000);
+        List<EventCard> timeline = new ArrayList<>(List.of(existing));
+        List<EventCard> deck = new ArrayList<>(List.of(card));
+        List<Integer> hand = new ArrayList<>(List.of(0));
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(player));
+        when(gameCardHelper.deserializeHandIndices(any())).thenReturn(hand);
+        when(gameCardHelper.deserializeDeck(game.getDeckJson())).thenReturn(deck);
+        when(gameCardHelper.deserializeDeck(any())).thenAnswer(invocation -> {
+            String arg = invocation.getArgument(0);
+            if (arg.equals(game.getDeckJson())) return deck;
+            return timeline;
+        });
+        when(gameCardHelper.serializeDeck(any())).thenReturn("[]");
+        when(gameCardHelper.serializeHandIndices(any())).thenReturn("[]");
+        // game not finished: players all still have cards
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(player));
+
+        GameService.PlacementResult result = timelineGameService.placeCard(1L, 0, 1);
+
+        assertTrue(result.correct());
+        assertEquals(card, result.card());
+        assertTrue(player.getScore() > 0);
+        assertEquals(1, player.getCorrectPlacements());
+        assertEquals(1, player.getCorrectStreak());
+    }
+
+    /** placeCard with known input: incorrect placement */
+
+    @Test
+    void placeCard_incorrectPlacement_dealsPenaltyCard() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
+        game.setDeckJson("[\"deck\"]");
+        game.setTimelineJson("[\"timeline\"]");
+        game.setDeckSize(10);
+        game.setNextCardIndex(3);
+
+        // card year 500, placed AFTER existing year 1000 → incorrect
+        EventCard card = new EventCard(); card.setTitle("Ancient"); card.setYear(500);
+        EventCard existing1 = new EventCard(); existing1.setYear(1000);
+        EventCard existing2 = new EventCard(); existing2.setYear(2000);
+        List<EventCard> timeline = new ArrayList<>(List.of(existing1, existing2));
+        List<EventCard> deck = new ArrayList<>(List.of(card));
+        List<Integer> hand = new ArrayList<>(List.of(0));
+
+        GamePlayer player = new GamePlayer();
+        player.setId(1L);
+        player.setCurrentCardIndex(0);
+        player.setHandIndicesJson("[0]");
+        player.setScore(100);
+        player.setCorrectStreak(2);
+        player.setCorrectPlacements(2);
+        player.setIncorrectPlacements(0);
+        player.setCardsInHand(1);
+        player.setTurnStartedAt(Instant.now());
+        player.setActiveTurn(true);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(player));
+        when(gameCardHelper.deserializeHandIndices(any())).thenReturn(hand);
+        when(gameCardHelper.deserializeDeck(game.getDeckJson())).thenReturn(deck);
+        when(gameCardHelper.deserializeDeck(any())).thenAnswer(invocation -> {
+            String arg = invocation.getArgument(0);
+            if (arg.equals(game.getDeckJson())) return deck;
+            return timeline;
+        });
+        when(gameCardHelper.serializeHandIndices(any())).thenReturn("[]");
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(player));
+
+        GameService.PlacementResult result = timelineGameService.placeCard(1L, 0, 2);
+
+        assertFalse(result.correct());
+        assertEquals(0, player.getCorrectStreak());          // streak reset
+        assertEquals(1, player.getIncorrectPlacements());
+        verify(gameCardHelper).dealCardsToPlayer(eq(player), eq(game), eq(1));
+    }
+
+    /** placeCard: game finishes on this move */
+
+    @Test
+    void placeCard_gameFinishesAfterMove_finalizationCalled() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+        game.setGameMode(GameMode.TIMELINE);
+        game.setDeckJson("[]");
+        game.setTimelineJson("[]");
+        game.setDeckSize(1);
+        game.setNextCardIndex(1); // deck exhausted → game finished
+
+        EventCard card = new EventCard(); card.setTitle("Last"); card.setYear(2000);
+        List<EventCard> deck = new ArrayList<>(List.of(card));
+        List<EventCard> timeline = new ArrayList<>();
+        List<Integer> hand = new ArrayList<>(List.of(0));
+
+        GamePlayer player = new GamePlayer();
+        player.setId(1L);
+        player.setCurrentCardIndex(0);
+        player.setHandIndicesJson("[0]");
+        player.setScore(0);
+        player.setCorrectStreak(0);
+        player.setCorrectPlacements(0);
+        player.setIncorrectPlacements(0);
+        player.setCardsInHand(1);
+        player.setTurnStartedAt(Instant.now());
+        player.setActiveTurn(true);
+        player.setBestStreak(0);
+
+        when(gameRepository.findById(1L)).thenReturn(Optional.of(game));
+        when(gamePlayerRepository.findByGameAndActiveTurnTrue(game)).thenReturn(Optional.of(player));
+        when(gameCardHelper.deserializeHandIndices(any())).thenReturn(hand);
+        when(gameCardHelper.deserializeDeck(game.getDeckJson())).thenReturn(deck);
+        when(gameCardHelper.deserializeDeck(any())).thenAnswer(invocation -> {
+            String arg = invocation.getArgument(0);
+            if (arg.equals(game.getDeckJson())) return deck;
+            return timeline;
+        });
+        when(gameCardHelper.serializeDeck(any())).thenReturn("[]");
+        when(gameCardHelper.serializeHandIndices(any())).thenReturn("[]");
+
+        timelineGameService.placeCard(1L, 0, 0);
+
+        verify(gameFinalizationService).finalizeGame(1L);
     }
 }
