@@ -44,6 +44,7 @@ public class UserService {
         newUser.setToken(UUID.randomUUID().toString());
         newUser.setStatus(UserStatus.ONLINE);
         newUser.setCreationDate(Instant.now());
+        newUser.setLastSeenAt(Instant.now());
 
         if (newUser.getBio() == null) {
             newUser.setBio("");

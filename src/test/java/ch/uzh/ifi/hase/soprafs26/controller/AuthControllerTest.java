@@ -77,6 +77,15 @@ public class AuthControllerTest {
                 .andExpect(status().isNoContent());
     }
 
+    @Test
+    public void heartbeat_validToken_returnsNoContent() throws Exception {
+        doNothing().when(authService).heartbeat("valid-token");
+
+        mockMvc.perform(post("/auth/heartbeat")
+                        .header("Authorization", "valid-token"))
+                .andExpect(status().isNoContent());
+    }
+
     private String asJsonString(final Object object) {
         try {
             return new ObjectMapper().writeValueAsString(object);

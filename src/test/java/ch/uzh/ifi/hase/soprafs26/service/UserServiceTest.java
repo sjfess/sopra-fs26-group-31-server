@@ -54,6 +54,7 @@ public class UserServiceTest {
         assertNotNull(createdUser.getToken());
         assertEquals(UserStatus.ONLINE, createdUser.getStatus());
         assertNotNull(createdUser.getCreationDate());
+        assertNotNull(createdUser.getLastSeenAt());
         assertEquals("", createdUser.getBio());
         assertEquals(0, createdUser.getTotalGamesPlayed());
         assertEquals(0, createdUser.getTotalWins());
