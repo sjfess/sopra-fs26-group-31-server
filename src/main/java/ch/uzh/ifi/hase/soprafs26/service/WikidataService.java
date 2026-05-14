@@ -105,6 +105,8 @@ public class WikidataService {
             """;
 
     private static final double BATTLE_CAP = 0.2;
+    private static final int CACHE_SIZE_PER_ERA = 300;
+    private static final double CURATED_RATIO = 1.0 / 3.0;
 
     private final RestClient restClient;
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
@@ -143,7 +145,7 @@ public class WikidataService {
         }
 
         log.info("No DB cache for era {}. Fetching from Wikidata...", era);
-        List<EventCard> fresh = fetchFromWikidata(era, 300);
+        List<EventCard> fresh = fetchFromWikidata(era, CACHE_SIZE_PER_ERA);
         fresh.forEach(card -> card.setEra(era));
         eventCardRepository.saveAll(fresh);
         log.info("Saved {} cards for era {} to database", fresh.size(), era);
@@ -157,41 +159,57 @@ public class WikidataService {
         return allCards.stream().limit(limit).collect(Collectors.toList());
     }
 
-    // =========================================================================
-    // Private Wikidata fetch — euer bisheriger fetchEvents()-Code, nur
-    // cacheBuster → era.name() geändert (Schritt 1)
-    // =========================================================================
+// =========================================================================
+// Builds the cached event pool for one era.
+// Target mix: 1/3 curated well-known events, 2/3 Wikidata events.
+// =========================================================================
 
     private List<EventCard> fetchFromWikidata(HistoricalEra era, int limit) {
         String tag = era.name();
-        int q2Limit = Math.max(8, (int) (limit * BATTLE_CAP));
+
+        int curatedTarget = Math.max(1, (int) Math.round(limit * CURATED_RATIO));
+        int wikidataTarget = limit - curatedTarget;
+
+        int q2Limit = Math.max(8, (int) (wikidataTarget * BATTLE_CAP));
 
         CompletableFuture<List<EventCard>> f1 = CompletableFuture.supplyAsync(() -> {
             try {
                 return runSparql(String.format(EVENTS_QUERY, tag,
-                        era.getStartYear(), era.getEndYear(), limit * 5));
-            } catch (Exception e) { log.warn("Query1 failed: {}", e.getMessage()); return List.of(); }
+                        era.getStartYear(), era.getEndYear(), wikidataTarget * 5));
+            } catch (Exception e) {
+                log.warn("Query1 failed: {}", e.getMessage());
+                return List.of();
+            }
         }, executor);
 
         CompletableFuture<List<EventCard>> f2 = CompletableFuture.supplyAsync(() -> {
             try {
                 return runSparql(String.format(START_DATE_QUERY, tag,
                         era.getStartYear(), era.getEndYear(), q2Limit));
-            } catch (Exception e) { log.warn("Query2 failed: {}", e.getMessage()); return List.of(); }
+            } catch (Exception e) {
+                log.warn("Query2 failed: {}", e.getMessage());
+                return List.of();
+            }
         }, executor);
 
         CompletableFuture<List<EventCard>> f3 = CompletableFuture.supplyAsync(() -> {
             try {
                 return runSparql(String.format(HISTORICAL_EVENT_QUERY, tag,
-                        era.getStartYear(), era.getEndYear(), limit * 3));
-            } catch (Exception e) { log.warn("Query3 failed: {}", e.getMessage()); return List.of(); }
+                        era.getStartYear(), era.getEndYear(), wikidataTarget * 3));
+            } catch (Exception e) {
+                log.warn("Query3 failed: {}", e.getMessage());
+                return List.of();
+            }
         }, executor);
 
         CompletableFuture<List<EventCard>> f4 = CompletableFuture.supplyAsync(() -> {
             try {
                 return runSparql(String.format(CULTURAL_QUERY, tag,
-                        era.getStartYear(), era.getEndYear(), limit * 3));
-            } catch (Exception e) { log.warn("Query4 failed: {}", e.getMessage()); return List.of(); }
+                        era.getStartYear(), era.getEndYear(), wikidataTarget * 3));
+            } catch (Exception e) {
+                log.warn("Query4 failed: {}", e.getMessage());
+                return List.of();
+            }
         }, executor);
 
         CompletableFuture.allOf(f1, f2, f3, f4).join();
@@ -202,78 +220,156 @@ public class WikidataService {
         List<EventCard> q3Pool = new ArrayList<>();
         List<EventCard> q4Pool = new ArrayList<>();
 
-        for (EventCard c : f1.join()) { if (seenGlobal.add(c.getTitle().toLowerCase())) q1Pool.add(c); }
-        for (EventCard c : f2.join()) { if (seenGlobal.add(c.getTitle().toLowerCase())) q2Pool.add(c); }
-        for (EventCard c : f3.join()) { if (seenGlobal.add(c.getTitle().toLowerCase())) q3Pool.add(c); }
-        for (EventCard c : f4.join()) { if (seenGlobal.add(c.getTitle().toLowerCase())) q4Pool.add(c); }
-
-        log.info("Pool sizes – Q1:{} Q2:{} Q3:{} Q4:{}", q1Pool.size(), q2Pool.size(), q3Pool.size(), q4Pool.size());
-
-        List<EventCard> curatedPool = new ArrayList<>();
-        Set<String> seenCurated = new HashSet<>();
-        for (EventCard c : getCuratedCards(era)) {
-            if (seenCurated.add(c.getTitle().toLowerCase())) curatedPool.add(c);
+        for (EventCard c : f1.join()) {
+            if (seenGlobal.add(normalizeKey(c))) q1Pool.add(c);
         }
+        for (EventCard c : f2.join()) {
+            if (seenGlobal.add(normalizeKey(c))) q2Pool.add(c);
+        }
+        for (EventCard c : f3.join()) {
+            if (seenGlobal.add(normalizeKey(c))) q3Pool.add(c);
+        }
+        for (EventCard c : f4.join()) {
+            if (seenGlobal.add(normalizeKey(c))) q4Pool.add(c);
+        }
+
+        log.info("Pool sizes – Q1:{} Q2:{} Q3:{} Q4:{}",
+                q1Pool.size(), q2Pool.size(), q3Pool.size(), q4Pool.size());
 
         Collections.shuffle(q1Pool);
         Collections.shuffle(q2Pool);
         Collections.shuffle(q3Pool);
         Collections.shuffle(q4Pool);
-        Collections.shuffle(curatedPool);
 
         double q1Weight, q2Weight, q3Weight, q4Weight;
         if (era == HistoricalEra.ANCIENT) {
-            q1Weight = 0.15; q2Weight = 0.05; q3Weight = 0.40; q4Weight = 0.40;
+            q1Weight = 0.15;
+            q2Weight = 0.05;
+            q3Weight = 0.40;
+            q4Weight = 0.40;
         } else if (era == HistoricalEra.MEDIEVAL) {
-            q1Weight = 0.20; q2Weight = 0.10; q3Weight = 0.35; q4Weight = 0.35;
+            q1Weight = 0.20;
+            q2Weight = 0.10;
+            q3Weight = 0.35;
+            q4Weight = 0.35;
         } else {
-            q1Weight = 0.25; q2Weight = 0.10; q3Weight = 0.35; q4Weight = 0.30;
+            q1Weight = 0.25;
+            q2Weight = 0.10;
+            q3Weight = 0.35;
+            q4Weight = 0.30;
+        }
+
+        List<EventCard> wikidataCards = new ArrayList<>();
+        Set<String> seenWikidata = new HashSet<>();
+
+        addUpTo(wikidataCards, seenWikidata, q4Pool, (int) (wikidataTarget * q4Weight), wikidataTarget);
+        addUpTo(wikidataCards, seenWikidata, q3Pool, (int) (wikidataTarget * q3Weight), wikidataTarget);
+        addUpTo(wikidataCards, seenWikidata, q1Pool, (int) (wikidataTarget * q1Weight), wikidataTarget);
+        addUpTo(wikidataCards, seenWikidata, q2Pool, (int) (wikidataTarget * q2Weight), wikidataTarget);
+
+        List<EventCard> fallback = new ArrayList<>();
+        fallback.addAll(q4Pool);
+        fallback.addAll(q3Pool);
+        fallback.addAll(q1Pool);
+        fallback.addAll(q2Pool);
+        Collections.shuffle(fallback);
+
+        for (EventCard c : fallback) {
+            if (wikidataCards.size() >= wikidataTarget) break;
+            if (seenWikidata.add(normalizeKey(c))) {
+                wikidataCards.add(c);
+            }
+        }
+
+        List<EventCard> filteredWikidataCards = applyDiversityFilter(wikidataCards, wikidataTarget);
+
+        List<EventCard> allCurated = new ArrayList<>(getCuratedCards(era));
+        Collections.shuffle(allCurated);
+
+        List<EventCard> curatedCards = new ArrayList<>();
+        Set<String> seenCurated = new HashSet<>();
+
+        for (EventCard c : allCurated) {
+            if (curatedCards.size() >= curatedTarget) break;
+            if (seenCurated.add(normalizeKey(c))) {
+                curatedCards.add(c);
+            }
         }
 
         List<EventCard> merged = new ArrayList<>();
-        Set<String> seen = new HashSet<>();
+        Set<String> seenFinal = new HashSet<>();
 
-        java.util.function.BiConsumer<List<EventCard>, Integer> addUpTo = (source, max) -> {
-            int[] rem = {max};
-            for (EventCard c : source) {
-                if (merged.size() >= limit || rem[0] <= 0) break;
-                if (seen.add(c.getTitle().toLowerCase())) { merged.add(c); rem[0]--; }
+        for (EventCard c : curatedCards) {
+            if (seenFinal.add(normalizeKey(c))) {
+                merged.add(c);
             }
-        };
+        }
 
-        addUpTo.accept(q4Pool, (int)(limit * q4Weight));
-        addUpTo.accept(q3Pool, (int)(limit * q3Weight));
-        addUpTo.accept(q1Pool, (int)(limit * q1Weight));
-        addUpTo.accept(q2Pool, (int)(limit * q2Weight));
+        for (EventCard c : filteredWikidataCards) {
+            if (seenFinal.add(normalizeKey(c))) {
+                merged.add(c);
+            }
+        }
 
-        List<EventCard> fallback = new ArrayList<>();
-        fallback.addAll(q4Pool); fallback.addAll(q3Pool);
-        fallback.addAll(q1Pool); fallback.addAll(q2Pool);
-        Collections.shuffle(fallback);
+        // Falls zu wenig Wikidata kam, mit weiteren curated Cards auffüllen.
+        for (EventCard c : allCurated) {
+            if (merged.size() >= limit) break;
+            if (seenFinal.add(normalizeKey(c))) {
+                merged.add(c);
+            }
+        }
+
+        // Falls zu wenig curated Cards existieren, mit weiteren Wikidata Cards auffüllen.
         for (EventCard c : fallback) {
             if (merged.size() >= limit) break;
-            if (seen.add(c.getTitle().toLowerCase())) merged.add(c);
+            if (seenFinal.add(normalizeKey(c))) {
+                merged.add(c);
+            }
         }
 
-        int gap = Math.max(0, limit - merged.size());
-        int curatedLimit = Math.min(curatedPool.size(), Math.max(gap, 3));
-        log.info("SPARQL produced {} cards, inserting up to {} curated", merged.size(), curatedLimit);
+        Collections.shuffle(merged);
 
-        for (int i = 0; i < curatedLimit; i++) {
-            EventCard curated = curatedPool.get(i);
-            String key = curated.getTitle().toLowerCase();
-            boolean exists = merged.stream().anyMatch(m -> m.getTitle().toLowerCase().equals(key));
-            if (exists) { curatedLimit = Math.min(curatedLimit + 1, curatedPool.size()); continue; }
-            int pos = (int) (Math.random() * (merged.size() + 1));
-            merged.add(pos, curated);
-            if (merged.size() > limit) merged.remove(merged.size() - 1);
+        if (merged.size() > limit) {
+            merged = new ArrayList<>(merged.subList(0, limit));
         }
 
-        List<EventCard> result = applyDiversityFilter(merged, limit);
-        log.info("Returning {} diverse event cards for era {}", result.size(), era);
-        return result;
+        log.info("Returning {} event cards for era {} (target: {} Wikidata, {} curated)",
+                merged.size(), era, wikidataTarget, curatedTarget);
+
+        return merged;
     }
 
+    private String normalizeKey(EventCard card) {
+        if (card == null || card.getTitle() == null) {
+            return "";
+        }
+
+        return (card.getTitle() + "|" + card.getYear())
+                .toLowerCase()
+                .replaceAll("[^a-z0-9|\\-]", "")
+                .trim();
+    }
+
+    private void addUpTo(
+            List<EventCard> target,
+            Set<String> seen,
+            List<EventCard> source,
+            int maxFromSource,
+            int maxTotal
+    ) {
+        int addedFromSource = 0;
+
+        for (EventCard card : source) {
+            if (target.size() >= maxTotal || addedFromSource >= maxFromSource) {
+                break;
+            }
+
+            if (seen.add(normalizeKey(card))) {
+                target.add(card);
+                addedFromSource++;
+            }
+        }
+    }
     // =========================================================================
     // SPARQL call — unverändert
     // =========================================================================
