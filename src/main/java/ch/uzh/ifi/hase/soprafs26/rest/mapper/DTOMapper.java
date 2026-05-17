@@ -50,6 +50,7 @@ public interface DTOMapper {
     @Mapping(source = "totalPoints", target = "totalPoints")
     @Mapping(source = "totalCorrectPlacements", target = "totalCorrectPlacements")
     @Mapping(source = "totalIncorrectPlacements", target = "totalIncorrectPlacements")
+    @Mapping(source = "avatarUrl", target = "avatarUrl")
     UserGetDTO convertEntityToUserGetDTO(User user);
 
     // FriendRequest
@@ -94,6 +95,7 @@ public interface DTOMapper {
 
     @Mapping(source = "user.id", target = "id")
     @Mapping(source = "user.username", target = "username")
+    @Mapping(source = "user.avatarUrl", target = "avatarUrl")
     PlayerSummaryDTO convertGamePlayerToPlayerSummaryDTO(GamePlayer gamePlayer);
 
 

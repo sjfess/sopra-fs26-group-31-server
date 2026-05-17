@@ -83,7 +83,7 @@ public class UserService {
                     "The username provided is not unique. Therefore, the user could not be created!");
         }
     }
-    public void updateUserProfile(String token, Long userId, String username, String bio) {
+    public void updateUserProfile(String token, Long userId, String username, String bio, String avatarUrl) {
         User requester = userRepository.findByToken(token);
 
         if (requester == null) {
@@ -110,6 +110,10 @@ public class UserService {
 
         if (bio != null) {
             userToUpdate.setBio(bio);
+        }
+
+        if (avatarUrl != null) {
+            userToUpdate.setAvatarUrl(avatarUrl);
         }
 
         userRepository.save(userToUpdate);

@@ -6,6 +6,7 @@ public class GamePlayerScoreDTO {
 
     private Long userId;
     private String username;
+    private String avatarUrl;
     private Integer score;
     private Integer turnOrder;
     private Boolean activeTurn;
@@ -31,6 +32,14 @@ public class GamePlayerScoreDTO {
 
     public void setUsername(String username) {
         this.username = username;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
     }
 
     public Integer getScore() {
