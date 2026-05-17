@@ -105,14 +105,13 @@ public class WikidataService {
             """;
 
     private static final double BATTLE_CAP = 0.2;
+    private static final int CACHE_SIZE_PER_ERA = 300;
+    private static final double CURATED_RATIO = 1.0 / 3.0;
 
     private final RestClient restClient;
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
     private final EventCardRepository eventCardRepository;  // NEU
 
-    // =========================================================================
-    // Konstruktor — NEU: EventCardRepository injiziert
-    // =========================================================================
 
     public WikidataService(EventCardRepository eventCardRepository) {
         this.eventCardRepository = eventCardRepository;
@@ -143,55 +142,70 @@ public class WikidataService {
         }
 
         log.info("No DB cache for era {}. Fetching from Wikidata...", era);
-        List<EventCard> fresh = fetchFromWikidata(era, 300);
+        List<EventCard> fresh = fetchFromWikidata(era, CACHE_SIZE_PER_ERA);
         fresh.forEach(card -> card.setEra(era));
         eventCardRepository.saveAll(fresh);
         log.info("Saved {} cards for era {} to database", fresh.size(), era);
         return fresh;
     }
 
-    // Diese Methode wird NICHT gecacht — shuffelt und limitiert jedes Mal neu
     public List<EventCard> fetchEvents(HistoricalEra era, int limit) {
         List<EventCard> allCards = new ArrayList<>(getCachedCards(era));
         Collections.shuffle(allCards);
         return allCards.stream().limit(limit).collect(Collectors.toList());
     }
 
-    // =========================================================================
-    // Private Wikidata fetch — euer bisheriger fetchEvents()-Code, nur
-    // cacheBuster → era.name() geändert (Schritt 1)
-    // =========================================================================
+// =========================================================================
+// Builds the cached event pool for one era.
+// Target mix: 1/3 curated well-known events, 2/3 Wikidata events.
+// =========================================================================
 
     private List<EventCard> fetchFromWikidata(HistoricalEra era, int limit) {
         String tag = era.name();
-        int q2Limit = Math.max(8, (int) (limit * BATTLE_CAP));
+
+        int curatedTarget = Math.max(1, (int) Math.round(limit * CURATED_RATIO));
+        int wikidataTarget = limit - curatedTarget;
+
+        int q2Limit = Math.max(8, (int) (wikidataTarget * BATTLE_CAP));
 
         CompletableFuture<List<EventCard>> f1 = CompletableFuture.supplyAsync(() -> {
             try {
                 return runSparql(String.format(EVENTS_QUERY, tag,
-                        era.getStartYear(), era.getEndYear(), limit * 5));
-            } catch (Exception e) { log.warn("Query1 failed: {}", e.getMessage()); return List.of(); }
+                        era.getStartYear(), era.getEndYear(), wikidataTarget * 5));
+            } catch (Exception e) {
+                log.warn("Query1 failed: {}", e.getMessage());
+                return List.of();
+            }
         }, executor);
 
         CompletableFuture<List<EventCard>> f2 = CompletableFuture.supplyAsync(() -> {
             try {
                 return runSparql(String.format(START_DATE_QUERY, tag,
                         era.getStartYear(), era.getEndYear(), q2Limit));
-            } catch (Exception e) { log.warn("Query2 failed: {}", e.getMessage()); return List.of(); }
+            } catch (Exception e) {
+                log.warn("Query2 failed: {}", e.getMessage());
+                return List.of();
+            }
         }, executor);
 
         CompletableFuture<List<EventCard>> f3 = CompletableFuture.supplyAsync(() -> {
             try {
                 return runSparql(String.format(HISTORICAL_EVENT_QUERY, tag,
-                        era.getStartYear(), era.getEndYear(), limit * 3));
-            } catch (Exception e) { log.warn("Query3 failed: {}", e.getMessage()); return List.of(); }
+                        era.getStartYear(), era.getEndYear(), wikidataTarget * 3));
+            } catch (Exception e) {
+                log.warn("Query3 failed: {}", e.getMessage());
+                return List.of();
+            }
         }, executor);
 
         CompletableFuture<List<EventCard>> f4 = CompletableFuture.supplyAsync(() -> {
             try {
                 return runSparql(String.format(CULTURAL_QUERY, tag,
-                        era.getStartYear(), era.getEndYear(), limit * 3));
-            } catch (Exception e) { log.warn("Query4 failed: {}", e.getMessage()); return List.of(); }
+                        era.getStartYear(), era.getEndYear(), wikidataTarget * 3));
+            } catch (Exception e) {
+                log.warn("Query4 failed: {}", e.getMessage());
+                return List.of();
+            }
         }, executor);
 
         CompletableFuture.allOf(f1, f2, f3, f4).join();
@@ -202,80 +216,158 @@ public class WikidataService {
         List<EventCard> q3Pool = new ArrayList<>();
         List<EventCard> q4Pool = new ArrayList<>();
 
-        for (EventCard c : f1.join()) { if (seenGlobal.add(c.getTitle().toLowerCase())) q1Pool.add(c); }
-        for (EventCard c : f2.join()) { if (seenGlobal.add(c.getTitle().toLowerCase())) q2Pool.add(c); }
-        for (EventCard c : f3.join()) { if (seenGlobal.add(c.getTitle().toLowerCase())) q3Pool.add(c); }
-        for (EventCard c : f4.join()) { if (seenGlobal.add(c.getTitle().toLowerCase())) q4Pool.add(c); }
-
-        log.info("Pool sizes – Q1:{} Q2:{} Q3:{} Q4:{}", q1Pool.size(), q2Pool.size(), q3Pool.size(), q4Pool.size());
-
-        List<EventCard> curatedPool = new ArrayList<>();
-        Set<String> seenCurated = new HashSet<>();
-        for (EventCard c : getCuratedCards(era)) {
-            if (seenCurated.add(c.getTitle().toLowerCase())) curatedPool.add(c);
+        for (EventCard c : f1.join()) {
+            if (seenGlobal.add(normalizeKey(c))) q1Pool.add(c);
         }
+        for (EventCard c : f2.join()) {
+            if (seenGlobal.add(normalizeKey(c))) q2Pool.add(c);
+        }
+        for (EventCard c : f3.join()) {
+            if (seenGlobal.add(normalizeKey(c))) q3Pool.add(c);
+        }
+        for (EventCard c : f4.join()) {
+            if (seenGlobal.add(normalizeKey(c))) q4Pool.add(c);
+        }
+
+        log.info("Pool sizes – Q1:{} Q2:{} Q3:{} Q4:{}",
+                q1Pool.size(), q2Pool.size(), q3Pool.size(), q4Pool.size());
 
         Collections.shuffle(q1Pool);
         Collections.shuffle(q2Pool);
         Collections.shuffle(q3Pool);
         Collections.shuffle(q4Pool);
-        Collections.shuffle(curatedPool);
 
         double q1Weight, q2Weight, q3Weight, q4Weight;
         if (era == HistoricalEra.ANCIENT) {
-            q1Weight = 0.15; q2Weight = 0.05; q3Weight = 0.40; q4Weight = 0.40;
+            q1Weight = 0.15;
+            q2Weight = 0.05;
+            q3Weight = 0.40;
+            q4Weight = 0.40;
         } else if (era == HistoricalEra.MEDIEVAL) {
-            q1Weight = 0.20; q2Weight = 0.10; q3Weight = 0.35; q4Weight = 0.35;
+            q1Weight = 0.20;
+            q2Weight = 0.10;
+            q3Weight = 0.35;
+            q4Weight = 0.35;
         } else {
-            q1Weight = 0.25; q2Weight = 0.10; q3Weight = 0.35; q4Weight = 0.30;
+            q1Weight = 0.25;
+            q2Weight = 0.10;
+            q3Weight = 0.35;
+            q4Weight = 0.30;
+        }
+
+        List<EventCard> wikidataCards = new ArrayList<>();
+        Set<String> seenWikidata = new HashSet<>();
+
+        addUpTo(wikidataCards, seenWikidata, q4Pool, (int) (wikidataTarget * q4Weight), wikidataTarget);
+        addUpTo(wikidataCards, seenWikidata, q3Pool, (int) (wikidataTarget * q3Weight), wikidataTarget);
+        addUpTo(wikidataCards, seenWikidata, q1Pool, (int) (wikidataTarget * q1Weight), wikidataTarget);
+        addUpTo(wikidataCards, seenWikidata, q2Pool, (int) (wikidataTarget * q2Weight), wikidataTarget);
+
+        List<EventCard> fallback = new ArrayList<>();
+        fallback.addAll(q4Pool);
+        fallback.addAll(q3Pool);
+        fallback.addAll(q1Pool);
+        fallback.addAll(q2Pool);
+        Collections.shuffle(fallback);
+
+        for (EventCard c : fallback) {
+            if (wikidataCards.size() >= wikidataTarget) break;
+            if (seenWikidata.add(normalizeKey(c))) {
+                wikidataCards.add(c);
+            }
+        }
+
+        List<EventCard> filteredWikidataCards = applyDiversityFilter(wikidataCards, wikidataTarget);
+
+        List<EventCard> allCurated = new ArrayList<>(getCuratedCards(era));
+        Collections.shuffle(allCurated);
+
+        List<EventCard> curatedCards = new ArrayList<>();
+        Set<String> seenCurated = new HashSet<>();
+
+        for (EventCard c : allCurated) {
+            if (curatedCards.size() >= curatedTarget) break;
+            if (seenCurated.add(normalizeKey(c))) {
+                curatedCards.add(c);
+            }
         }
 
         List<EventCard> merged = new ArrayList<>();
-        Set<String> seen = new HashSet<>();
+        Set<String> seenFinal = new HashSet<>();
 
-        java.util.function.BiConsumer<List<EventCard>, Integer> addUpTo = (source, max) -> {
-            int[] rem = {max};
-            for (EventCard c : source) {
-                if (merged.size() >= limit || rem[0] <= 0) break;
-                if (seen.add(c.getTitle().toLowerCase())) { merged.add(c); rem[0]--; }
+        for (EventCard c : curatedCards) {
+            if (seenFinal.add(normalizeKey(c))) {
+                merged.add(c);
             }
-        };
+        }
 
-        addUpTo.accept(q4Pool, (int)(limit * q4Weight));
-        addUpTo.accept(q3Pool, (int)(limit * q3Weight));
-        addUpTo.accept(q1Pool, (int)(limit * q1Weight));
-        addUpTo.accept(q2Pool, (int)(limit * q2Weight));
+        for (EventCard c : filteredWikidataCards) {
+            if (seenFinal.add(normalizeKey(c))) {
+                merged.add(c);
+            }
+        }
 
-        List<EventCard> fallback = new ArrayList<>();
-        fallback.addAll(q4Pool); fallback.addAll(q3Pool);
-        fallback.addAll(q1Pool); fallback.addAll(q2Pool);
-        Collections.shuffle(fallback);
+        // Falls zu wenig Wikidata kam, mit weiteren curated Cards auffüllen.
+        for (EventCard c : allCurated) {
+            if (merged.size() >= limit) break;
+            if (seenFinal.add(normalizeKey(c))) {
+                merged.add(c);
+            }
+        }
+
+        // Falls zu wenig curated Cards existieren, mit weiteren Wikidata Cards auffüllen.
         for (EventCard c : fallback) {
             if (merged.size() >= limit) break;
-            if (seen.add(c.getTitle().toLowerCase())) merged.add(c);
+            if (seenFinal.add(normalizeKey(c))) {
+                merged.add(c);
+            }
         }
 
-        int gap = Math.max(0, limit - merged.size());
-        int curatedLimit = Math.min(curatedPool.size(), Math.max(gap, 3));
-        log.info("SPARQL produced {} cards, inserting up to {} curated", merged.size(), curatedLimit);
+        Collections.shuffle(merged);
 
-        for (int i = 0; i < curatedLimit; i++) {
-            EventCard curated = curatedPool.get(i);
-            String key = curated.getTitle().toLowerCase();
-            boolean exists = merged.stream().anyMatch(m -> m.getTitle().toLowerCase().equals(key));
-            if (exists) { curatedLimit = Math.min(curatedLimit + 1, curatedPool.size()); continue; }
-            int pos = (int) (Math.random() * (merged.size() + 1));
-            merged.add(pos, curated);
-            if (merged.size() > limit) merged.remove(merged.size() - 1);
+        if (merged.size() > limit) {
+            merged = new ArrayList<>(merged.subList(0, limit));
         }
 
-        List<EventCard> result = applyDiversityFilter(merged, limit);
-        log.info("Returning {} diverse event cards for era {}", result.size(), era);
-        return result;
+        log.info("Returning {} event cards for era {} (target: {} Wikidata, {} curated)",
+                merged.size(), era, wikidataTarget, curatedTarget);
+
+        return merged;
     }
 
+    private String normalizeKey(EventCard card) {
+        if (card == null || card.getTitle() == null) {
+            return "";
+        }
+
+        return (card.getTitle() + "|" + card.getYear())
+                .toLowerCase()
+                .replaceAll("[^a-z0-9|\\-]", "")
+                .trim();
+    }
+
+    private void addUpTo(
+            List<EventCard> target,
+            Set<String> seen,
+            List<EventCard> source,
+            int maxFromSource,
+            int maxTotal
+    ) {
+        int addedFromSource = 0;
+
+        for (EventCard card : source) {
+            if (target.size() >= maxTotal || addedFromSource >= maxFromSource) {
+                break;
+            }
+
+            if (seen.add(normalizeKey(card))) {
+                target.add(card);
+                addedFromSource++;
+            }
+        }
+    }
     // =========================================================================
-    // SPARQL call — unverändert
+    // SPARQL call
     // =========================================================================
 
     List<EventCard> runSparql(String sparql) {
@@ -474,6 +566,171 @@ public class WikidataService {
         add(all, "Launch of the iPhone", 2007, null);
         add(all, "COVID-19 Pandemic begins", 2020, null);
 
+        // Ancient Era additions
+        add(all, "Invention of the Wheel in Mesopotamia", -3500, null);
+        add(all, "Unification of Upper and Lower Egypt by Narmer", -3100, null);
+        add(all, "Rise of the Indus Valley Civilization", -2600, null);
+        add(all, "Founding of the Akkadian Empire by Sargon of Akkad", -2334, null);
+        add(all, "Code of Ur-Nammu — earliest surviving law code", -2100, null);
+        add(all, "Battle of Kadesh between Egypt and the Hittites", -1274, null);
+        add(all, "Fall of the Shang Dynasty in China", -1046, null);
+        add(all, "Birth of Lao Tzu, founder of Taoism", -604, null);
+        add(all, "Birth of Pythagoras", -570, null);
+        add(all, "Founding of the Roman Republic", -509, null);
+        add(all, "Sun Tzu composes The Art of War", -500, null);
+        add(all, "Battle of Marathon", -490, null);
+        add(all, "Battle of Thermopylae", -480, null);
+        add(all, "Death of Socrates", -399, null);
+        add(all, "Battle of Gaugamela", -331, null);
+        add(all, "Death of Alexander the Great", -323, null);
+        add(all, "Ashoka the Great converts to Buddhism", -260, null);
+        add(all, "Qin Shi Huang becomes first Emperor of unified China", -221, null);
+        add(all, "Hannibal Barca crosses the Alps", -218, null);
+        add(all, "Han Dynasty founded in China", -206, null);
+        add(all, "Birth of Cicero", -106, null);
+        add(all, "Spartacus leads slave revolt against Rome", -73, null);
+        add(all, "Battle of Actium — Octavian defeats Mark Antony", -31, null);
+        add(all, "Great Fire of Rome under Emperor Nero", 64, null);
+        add(all, "Hadrian's Wall construction begins", 122, null);
+        add(all, "Edict of Milan — Constantine grants religious tolerance", 313, null);
+        add(all, "First Council of Nicaea", 325, null);
+        add(all, "Theodosius I makes Christianity the Roman state religion", 380, null);
+        add(all, "Sack of Rome by the Visigoths", 410, null);
+        add(all, "Death of Attila the Hun", 453, null);
+
+        // Medieval Era additions
+        add(all, "Battle of Tours — Charles Martel halts Muslim advance into Europe", 732, null);
+        add(all, "Viking raids on England begin at Lindisfarne", 793, null);
+        add(all, "Treaty of Verdun divides the Carolingian Empire", 843, null);
+        add(all, "Battle of Hastings and Norman Conquest of England", 1066, null);
+        add(all, "Battle of Manzikert — Seljuk Turks defeat the Byzantine Empire", 1071, null);
+        add(all, "First Crusade captures Jerusalem", 1099, null);
+        add(all, "Founding of the University of Paris", 1150, null);
+        add(all, "Death of Thomas Becket in Canterbury Cathedral", 1170, null);
+        add(all, "Saladin recaptures Jerusalem from the Crusaders", 1187, null);
+        add(all, "Genghis Khan unifies the Mongol tribes", 1206, null);
+        add(all, "Battle of Ain Jalut — Mamluks defeat the Mongols", 1260, null);
+        add(all, "Founding of the Ottoman Empire by Osman I", 1299, null);
+        add(all, "Dante Alighieri begins writing the Divine Comedy", 1308, null);
+        add(all, "Battle of Bannockburn — Scotland defeats England", 1314, null);
+        add(all, "Great Famine strikes Northern Europe", 1315, null);
+        add(all, "Hundred Years' War between France and England begins", 1337, null);
+        add(all, "Black Death kills one third of Europe's population", 1349, null);
+        add(all, "Peasants' Revolt in England", 1381, null);
+
+        // Renaissance Era additions
+        add(all, "Death of Joan of Arc", 1431, null);
+        add(all, "Birth of Raphael", 1483, null);
+        add(all, "Amerigo Vespucci explores South America", 1501, null);
+        add(all, "Death of Leonardo da Vinci", 1519, null);
+        add(all, "Birth of Queen Elizabeth I", 1533, null);
+        add(all, "Henry VIII breaks from the Catholic Church", 1534, null);
+        add(all, "Birth of Tycho Brahe", 1546, null);
+        add(all, "Birth of Miguel de Cervantes", 1547, null);
+        add(all, "Birth of Francis Bacon", 1561, null);
+        add(all, "Birth of Johannes Kepler", 1571, null);
+        add(all, "St. Bartholomew's Day Massacre in France", 1572, null);
+        add(all, "Birth of René Descartes", 1596, null);
+        add(all, "Birth of Oliver Cromwell", 1599, null);
+
+        // Modern Era additions
+        add(all, "Death of Queen Elizabeth I", 1603, null);
+        add(all, "Guy Fawkes Gunpowder Plot against English Parliament", 1605, null);
+        add(all, "Galileo Galilei discovers Jupiter's moons", 1610, null);
+        add(all, "King James Bible published", 1611, null);
+        add(all, "Thirty Years' War begins in Europe", 1618, null);
+        add(all, "Pilgrims land at Plymouth Rock", 1620, null);
+        add(all, "Birth of John Locke", 1632, null);
+        add(all, "Taj Mahal construction begins", 1632, null);
+        add(all, "Galileo's trial by the Inquisition", 1633, null);
+        add(all, "English Civil War begins", 1642, null);
+        add(all, "Great Plague of London", 1665, null);
+        add(all, "Great Fire of London", 1666, null);
+        add(all, "Newton publishes Principia Mathematica", 1687, null);
+        add(all, "Glorious Revolution in England", 1688, null);
+        add(all, "Birth of Voltaire", 1694, null);
+        add(all, "Peter the Great founds Saint Petersburg", 1703, null);
+        add(all, "Birth of Benjamin Franklin", 1706, null);
+        add(all, "Birth of Jean-Jacques Rousseau", 1712, null);
+        add(all, "Birth of Adam Smith", 1723, null);
+        add(all, "Birth of Immanuel Kant", 1724, null);
+        add(all, "Birth of George Washington", 1732, null);
+        add(all, "Seven Years' War begins", 1756, null);
+        add(all, "American Revolution begins at Lexington and Concord", 1775, null);
+        add(all, "Adam Smith publishes The Wealth of Nations", 1776, null);
+        add(all, "French Revolution begins", 1789, null);
+        add(all, "Storming of the Bastille", 1789, null);
+        add(all, "Washington becomes first President of the United States", 1789, null);
+        add(all, "Reign of Terror in France", 1793, null);
+        add(all, "Napoleon crowned Emperor of France", 1804, null);
+        add(all, "Battle of Trafalgar", 1805, null);
+        add(all, "Birth of Charles Dickens", 1812, null);
+        add(all, "Battle of Waterloo", 1815, null);
+        add(all, "Birth of Karl Marx", 1818, null);
+        add(all, "Death of Napoleon Bonaparte", 1821, null);
+        add(all, "Birth of Louis Pasteur", 1822, null);
+        add(all, "Birth of Mark Twain", 1835, null);
+        add(all, "First successful telegraph message sent by Samuel Morse", 1844, null);
+        add(all, "California Gold Rush begins", 1848, null);
+        add(all, "Birth of Sigmund Freud", 1856, null);
+        add(all, "Charles Darwin publishes On the Origin of Species", 1859, null);
+        add(all, "American Civil War begins", 1861, null);
+        add(all, "Assassination of Abraham Lincoln", 1865, null);
+        add(all, "Gregor Mendel publishes laws of heredity", 1866, null);
+        add(all, "Alfred Nobel invents dynamite", 1867, null);
+        add(all, "Birth of Vladimir Lenin", 1870, null);
+        add(all, "Birth of Winston Churchill", 1874, null);
+        add(all, "Louis Pasteur develops rabies vaccine", 1885, null);
+        add(all, "Eiffel Tower completed", 1889, null);
+        add(all, "Discovery of X-rays by Wilhelm Röntgen", 1895, null);
+        add(all, "Nobel Prize established by Alfred Nobel", 1895, null);
+        add(all, "Radioactivity discovered by Henri Becquerel", 1896, null);
+        add(all, "Spanish-American War", 1898, null);
+        add(all, "Sigmund Freud publishes The Interpretation of Dreams", 1899, null);
+
+        // Information Era additions
+        add(all, "Einstein publishes Theory of Special Relativity", 1905, null);
+        add(all, "First World War begins", 1914, null);
+        add(all, "Russian Revolution brings Bolsheviks to power", 1917, null);
+        add(all, "Treaty of Versailles signed, ending World War I", 1919, null);
+        add(all, "Women gain right to vote in the United States", 1920, null);
+        add(all, "League of Nations founded", 1920, null);
+        add(all, "Discovery of insulin by Banting and Best", 1921, null);
+        add(all, "Charles Lindbergh completes first solo transatlantic flight", 1927, null);
+        add(all, "Great Depression begins with Wall Street Crash", 1929, null);
+        add(all, "Adolf Hitler becomes Chancellor of Germany", 1933, null);
+        add(all, "Spanish Civil War begins", 1936, null);
+        add(all, "World War II begins", 1939, null);
+        add(all, "D-Day Normandy Landings", 1944, null);
+        add(all, "Atomic bomb dropped on Hiroshima", 1945, null);
+        add(all, "United Nations founded", 1945, null);
+        add(all, "Indian Independence from Britain", 1947, null);
+        add(all, "Universal Declaration of Human Rights adopted", 1948, null);
+        add(all, "People's Republic of China founded", 1949, null);
+        add(all, "Korean War begins", 1950, null);
+        add(all, "DNA double helix structure discovered by Watson and Crick", 1953, null);
+        add(all, "Rosa Parks refuses to give up her bus seat", 1955, null);
+        add(all, "Cuban Missile Crisis", 1962, null);
+        add(all, "Civil Rights Act passed in the United States", 1964, null);
+        add(all, "First heart transplant performed by Christiaan Barnard", 1967, null);
+        add(all, "Martin Luther King Jr. assassinated", 1968, null);
+        add(all, "Watergate scandal breaks", 1972, null);
+        add(all, "End of the Vietnam War", 1975, null);
+        add(all, "Apple Computer Company founded", 1976, null);
+        add(all, "First test-tube baby born", 1978, null);
+        add(all, "Chernobyl nuclear disaster", 1986, null);
+        add(all, "End of the Cold War", 1991, null);
+        add(all, "Apartheid ends in South Africa", 1994, null);
+        add(all, "Cloning of Dolly the sheep", 1996, null);
+        add(all, "September 11 terrorist attacks", 2001, null);
+        add(all, "Facebook founded by Mark Zuckerberg", 2004, null);
+        add(all, "Barack Obama elected as first African-American US President", 2008, null);
+        add(all, "Arab Spring begins", 2010, null);
+        add(all, "Discovery of the Higgs boson at CERN", 2012, null);
+        add(all, "Brexit referendum — UK votes to leave the EU", 2016, null);
+        add(all, "James Webb Space Telescope launched", 2021, null);
+        add(all, "Russia invades Ukraine", 2022, null);
+
         List<EventCard> matching = new ArrayList<>();
         for (EventCard c : all) {
             if (c.getYear() >= era.getStartYear() && c.getYear() <= era.getEndYear()) matching.add(c);
@@ -491,7 +748,7 @@ public class WikidataService {
     }
 
     // =========================================================================
-    // SPARQL response parser — unverändert
+    // SPARQL response parser
     // =========================================================================
 
     private List<EventCard> parseSparqlResponse(String json) {

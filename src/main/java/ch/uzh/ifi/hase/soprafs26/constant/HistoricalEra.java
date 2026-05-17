@@ -6,7 +6,7 @@ package ch.uzh.ifi.hase.soprafs26.constant;
  */
 public enum HistoricalEra {
 
-    ANCIENT(-3000, 500),
+    ANCIENT(-4000, 500),
     MEDIEVAL(500, 1400),
     RENAISSANCE(1400, 1600),
     MODERN(1600, 1900),

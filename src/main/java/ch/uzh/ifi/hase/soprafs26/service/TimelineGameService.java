@@ -283,6 +283,7 @@ public class TimelineGameService {
             GamePlayerScoreDTO dto = new GamePlayerScoreDTO();
             dto.setUserId(gamePlayer.getUser().getId());
             dto.setUsername(gamePlayer.getUser().getUsername());
+            dto.setAvatarUrl(gamePlayer.getUser().getAvatarUrl());
             dto.setScore(gamePlayer.getScore());
             dto.setTurnOrder(gamePlayer.getTurnOrder());
             dto.setActiveTurn(gamePlayer.getActiveTurn());

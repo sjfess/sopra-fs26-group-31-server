@@ -40,6 +40,9 @@ public class User implements Serializable {
     @Column(nullable = false)
     private Instant creationDate;
 
+    @Column
+    private Instant lastSeenAt;
+
     @Column(nullable = false)
     private Integer totalGamesPlayed = 0;
 
@@ -54,6 +57,9 @@ public class User implements Serializable {
 
     @Column(nullable = false)
     private Integer totalIncorrectPlacements = 0;
+
+    @Column(length = 512)
+    private String avatarUrl;
 
     @ManyToMany
     @JoinTable(
@@ -127,6 +133,14 @@ public class User implements Serializable {
         this.creationDate = creationDate;
     }
 
+    public Instant getLastSeenAt() {
+        return lastSeenAt;
+    }
+
+    public void setLastSeenAt(Instant lastSeenAt) {
+        this.lastSeenAt = lastSeenAt;
+    }
+
     public Integer getTotalGamesPlayed() {
         return totalGamesPlayed;
     }
@@ -165,6 +179,14 @@ public class User implements Serializable {
 
     public void setTotalIncorrectPlacements(Integer totalIncorrectPlacements) {
         this.totalIncorrectPlacements = totalIncorrectPlacements;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
     }
 
     public Set<User> getFriends() {

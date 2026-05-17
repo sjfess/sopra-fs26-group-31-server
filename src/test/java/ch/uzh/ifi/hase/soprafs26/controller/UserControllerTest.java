@@ -151,7 +151,7 @@ public class UserControllerTest {
         userPutDTO.setUsername("newUsername");
         userPutDTO.setBio("new bio");
 
-        doNothing().when(userService).updateUserProfile("valid-token", 1L, "newUsername", "new bio");
+        doNothing().when(userService).updateUserProfile("valid-token", 1L, "newUsername", "new bio", null);
 
         mockMvc.perform(put("/users/1")
                         .header("Authorization", "valid-token")
@@ -273,7 +273,7 @@ public class UserControllerTest {
         userPutDTO.setBio("bio");
 
         Mockito.doThrow(new ResponseStatusException(HttpStatus.UNAUTHORIZED))
-                .when(userService).updateUserProfile("wrong-token", 1L, "newUsername", "bio");
+                .when(userService).updateUserProfile("wrong-token", 1L, "newUsername", "bio", null);
 
         mockMvc.perform(put("/users/1")
                         .header("Authorization", "wrong-token")
@@ -282,6 +282,21 @@ public class UserControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+
+    @Test
+    public void updateUser_withAvatarUrl_returnsNoContent() throws Exception {
+        UserPutDTO userPutDTO = new UserPutDTO();
+        userPutDTO.setAvatarUrl("https://api.dicebear.com/9.x/lorelei/svg?seed=Curie");
+
+        doNothing().when(userService).updateUserProfile(
+                "valid-token", 1L, null, null, "https://api.dicebear.com/9.x/lorelei/svg?seed=Curie");
+
+        mockMvc.perform(put("/users/1")
+                        .header("Authorization", "valid-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(asJsonString(userPutDTO)))
+                .andExpect(status().isNoContent());
+    }
 
     @Test
     public void getUsers_emptyList_returnsEmptyArray() throws Exception {

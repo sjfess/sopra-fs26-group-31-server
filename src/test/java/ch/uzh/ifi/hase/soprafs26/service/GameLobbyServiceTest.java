@@ -484,4 +484,76 @@ public class GameLobbyServiceTest {
 
         verify(timelineGameService).advanceTurn(game, player);
     }
+
+    @Test
+    void checkTurnTimeouts_timedOutPlayer_gameFinished_finalizesGame() {
+        Game game = new Game();
+        game.setId(1L);
+        game.setStatus("IN_PROGRESS");
+        User user = new User(); user.setUsername("alice");
+        GamePlayer player = new GamePlayer();
+        player.setGame(game);
+        player.setUser(user);
+        player.setActiveTurn(true);
+        player.setCorrectStreak(2);
+        player.setTurnStartedAt(Instant.now().minusSeconds(60));
+        when(gamePlayerRepository.findByActiveTurnTrue()).thenReturn(List.of(player));
+        when(timelineGameService.isTimelineGameFinished(game)).thenReturn(true);
+
+        gameLobbyService.checkTurnTimeouts();
+
+        assertFalse(player.getActiveTurn());
+        assertEquals(0, player.getCorrectStreak());
+        verify(gameFinalizationService).finalizeGame(1L);
+        verify(timelineGameService, never()).advanceTurn(any(), any());
+    }
+
+    @Test
+    void leaveGame_inProgress_lastPlayerLeaves_finalizesGame() {
+        Game game = new Game(); game.setId(1L); game.setStatus("IN_PROGRESS"); game.setHostId(1L);
+        User user = new User(); user.setId(1L);
+        GamePlayer leavingPlayer = new GamePlayer();
+        leavingPlayer.setId(1L); leavingPlayer.setUser(user);
+        leavingPlayer.setActiveTurn(false); leavingPlayer.setTurnOrder(0);
+        when(gameRepository.findByLobbyCode("ABC")).thenReturn(Optional.of(game));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(gamePlayerRepository.existsByGameAndUser(game, user)).thenReturn(true);
+        when(gamePlayerRepository.findByGameAndUser(game, user)).thenReturn(Optional.of(leavingPlayer));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game)).thenReturn(List.of(leavingPlayer));
+
+        gameLobbyService.leaveGame("ABC", 1L);
+
+        verify(gameRepository).delete(game);
+    }
+
+    @Test
+    void leaveGame_inProgress_activeTurnPlayerLeaves_nextPlayerActivated() {
+        Game game = new Game(); game.setId(1L); game.setStatus("IN_PROGRESS"); game.setHostId(99L);
+        User leavingUser = new User(); leavingUser.setId(1L);
+        User otherUser = new User(); otherUser.setId(2L);
+        GamePlayer leavingPlayer = new GamePlayer();
+        leavingPlayer.setId(1L); leavingPlayer.setUser(leavingUser);
+        leavingPlayer.setActiveTurn(true); leavingPlayer.setTurnOrder(0);
+        GamePlayer otherPlayer = new GamePlayer();
+        otherPlayer.setId(2L); otherPlayer.setUser(otherUser);
+        otherPlayer.setActiveTurn(false); otherPlayer.setTurnOrder(1);
+
+        User thirdUser = new User(); thirdUser.setId(3L);
+        GamePlayer thirdPlayer = new GamePlayer();
+        thirdPlayer.setId(3L); thirdPlayer.setUser(thirdUser);
+        thirdPlayer.setActiveTurn(false); thirdPlayer.setTurnOrder(2);
+
+
+        when(gameRepository.findByLobbyCode("ABC")).thenReturn(Optional.of(game));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(leavingUser));
+        when(gamePlayerRepository.existsByGameAndUser(game, leavingUser)).thenReturn(true);
+        when(gamePlayerRepository.findByGameAndUser(game, leavingUser)).thenReturn(Optional.of(leavingPlayer));
+        when(gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game))
+                .thenReturn(List.of(leavingPlayer, otherPlayer, thirdPlayer));
+
+        gameLobbyService.leaveGame("ABC", 1L);
+
+        assertTrue(otherPlayer.getActiveTurn());
+        assertNotNull(otherPlayer.getTurnStartedAt());
+    }
 }

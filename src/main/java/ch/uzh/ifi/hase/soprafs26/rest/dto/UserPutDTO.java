@@ -4,6 +4,7 @@ public class UserPutDTO {
 
     private String username;
     private String bio;
+    private String avatarUrl;
 
     public String getUsername() {
         return username;
@@ -19,5 +20,13 @@ public class UserPutDTO {
 
     public void setBio(String bio) {
         this.bio = bio;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
     }
 }

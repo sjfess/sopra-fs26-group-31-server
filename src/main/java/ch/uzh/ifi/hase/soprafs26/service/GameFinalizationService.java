@@ -91,6 +91,7 @@ public class GameFinalizationService {
             FinalResultDTO dto = new FinalResultDTO();
             dto.setUserId(user.getId());
             dto.setUsername(user.getUsername());
+            dto.setAvatarUrl(user.getAvatarUrl());
             dto.setScore(score);
             dto.setCorrectPlacements(correctPlacements);
             dto.setIncorrectPlacements(incorrectPlacements);
@@ -122,6 +123,7 @@ public class GameFinalizationService {
             FinalResultDTO dto = new FinalResultDTO();
             dto.setUserId(gp.getUser().getId());
             dto.setUsername(gp.getUser().getUsername());
+            dto.setAvatarUrl(gp.getUser().getAvatarUrl());
             dto.setScore(score);
             dto.setCorrectPlacements(gp.getCorrectPlacements() != null ? gp.getCorrectPlacements() : 0);
             dto.setIncorrectPlacements(gp.getIncorrectPlacements() != null ? gp.getIncorrectPlacements() : 0);

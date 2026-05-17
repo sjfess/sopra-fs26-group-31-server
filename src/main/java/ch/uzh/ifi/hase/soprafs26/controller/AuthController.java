@@ -31,4 +31,10 @@ public class AuthController {
     public void logout(@RequestHeader("Authorization") String token) {
         authService.logout(token);
     }
+
+    @PostMapping("/heartbeat")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void heartbeat(@RequestHeader("Authorization") String token) {
+        authService.heartbeat(token);
+    }
 }

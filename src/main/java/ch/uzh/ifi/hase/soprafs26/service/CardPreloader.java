@@ -24,12 +24,10 @@ public class CardPreloader implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         log.info("=== Preloading event cards from Wikidata at startup ===");
 
-        // Nur unvollständige Eras neu laden (z.B. MEDIEVAL hatte Save-Fehler)
         for (HistoricalEra era : HistoricalEra.values()) {
             try {
                 long count = eventCardRepository.countByEra(era);
                 if (count < 50) {
-                    // Zu wenig Karten → alte löschen und neu laden
                     log.info("Era {} has only {} cards, reloading...", era, count);
                     eventCardRepository.deleteByEra(era);
                     Thread.sleep(3000);
