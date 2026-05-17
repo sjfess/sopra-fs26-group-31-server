@@ -112,9 +112,6 @@ public class WikidataService {
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
     private final EventCardRepository eventCardRepository;  // NEU
 
-    // =========================================================================
-    // Konstruktor — NEU: EventCardRepository injiziert
-    // =========================================================================
 
     public WikidataService(EventCardRepository eventCardRepository) {
         this.eventCardRepository = eventCardRepository;
@@ -152,7 +149,6 @@ public class WikidataService {
         return fresh;
     }
 
-    // Diese Methode wird NICHT gecacht — shuffelt und limitiert jedes Mal neu
     public List<EventCard> fetchEvents(HistoricalEra era, int limit) {
         List<EventCard> allCards = new ArrayList<>(getCachedCards(era));
         Collections.shuffle(allCards);
@@ -371,7 +367,7 @@ public class WikidataService {
         }
     }
     // =========================================================================
-    // SPARQL call — unverändert
+    // SPARQL call
     // =========================================================================
 
     List<EventCard> runSparql(String sparql) {
@@ -752,7 +748,7 @@ public class WikidataService {
     }
 
     // =========================================================================
-    // SPARQL response parser — unverändert
+    // SPARQL response parser
     // =========================================================================
 
     private List<EventCard> parseSparqlResponse(String json) {

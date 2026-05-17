@@ -113,9 +113,9 @@ public class GameLobbyService {
         }
 
         List<GamePlayer> existingPlayers = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
-        if (existingPlayers.size() >= 8) {
+        if (existingPlayers.size() >= 5) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Lobby is full (maximum 8 players)");
+                    "Lobby is full (maximum 5 players)");
         }
 
         User user = userRepository.findById(userId)
