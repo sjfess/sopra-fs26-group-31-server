@@ -58,6 +58,9 @@ public class User implements Serializable {
     @Column(nullable = false)
     private Integer totalIncorrectPlacements = 0;
 
+    @Column(length = 512)
+    private String avatarUrl;
+
     @ManyToMany
     @JoinTable(
             name = "user_friends",
@@ -176,6 +179,14 @@ public class User implements Serializable {
 
     public void setTotalIncorrectPlacements(Integer totalIncorrectPlacements) {
         this.totalIncorrectPlacements = totalIncorrectPlacements;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
     }
 
     public Set<User> getFriends() {

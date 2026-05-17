@@ -107,7 +107,7 @@ public class UserServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(requester));
         when(userRepository.findByUsername("newUsername")).thenReturn(null);
 
-        userService.updateUserProfile("valid-token", 1L, "newUsername", "new bio");
+        userService.updateUserProfile("valid-token", 1L, "newUsername", "new bio", null);
 
         assertEquals("newUsername", requester.getUsername());
         assertEquals("new bio", requester.getBio());
@@ -121,7 +121,7 @@ public class UserServiceTest {
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
-                () -> userService.updateUserProfile("invalid-token", 1L, "newUsername", "new bio")
+                () -> userService.updateUserProfile("invalid-token", 1L, "newUsername", "new bio", null)
         );
 
         assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
@@ -146,7 +146,7 @@ public class UserServiceTest {
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
-                () -> userService.updateUserProfile("valid-token", 2L, "newUsername", "new bio")
+                () -> userService.updateUserProfile("valid-token", 2L, "newUsername", "new bio", null)
         );
 
         assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
@@ -173,7 +173,7 @@ public class UserServiceTest {
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
-                () -> userService.updateUserProfile("valid-token", 1L, "takenUsername", "new bio")
+                () -> userService.updateUserProfile("valid-token", 1L, "takenUsername", "new bio", null)
         );
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
@@ -213,7 +213,7 @@ public class UserServiceTest {
         when(userRepository.findByToken("valid-token")).thenReturn(requester);
         when(userRepository.findById(1L)).thenReturn(Optional.of(requester));
 
-        userService.updateUserProfile("valid-token", 1L, "  ", "new bio");
+        userService.updateUserProfile("valid-token", 1L, "  ", "new bio", null);
 
         // Username bleibt unverändert
         assertEquals("oldUsername", requester.getUsername());
@@ -234,10 +234,52 @@ public class UserServiceTest {
         when(userRepository.findByToken("valid-token")).thenReturn(requester);
         when(userRepository.findById(1L)).thenReturn(Optional.of(requester));
 
-        userService.updateUserProfile("valid-token", 1L, null, "new bio");
+        userService.updateUserProfile("valid-token", 1L, null, "new bio", null);
 
         assertEquals("oldUsername", requester.getUsername());
         assertEquals("new bio", requester.getBio());
+    }
+
+    @Test
+    public void updateUserProfile_validAvatarUrl_avatarSaved() {
+        User requester = new User();
+        requester.setId(1L);
+        requester.setToken("valid-token");
+        requester.setUsername("user");
+        requester.setPassword("pw");
+        requester.setStatus(UserStatus.ONLINE);
+        requester.setBio("bio");
+        requester.setCreationDate(Instant.now());
+
+        String avatarUrl = "https://api.dicebear.com/9.x/lorelei/svg?seed=Curie";
+
+        when(userRepository.findByToken("valid-token")).thenReturn(requester);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(requester));
+
+        userService.updateUserProfile("valid-token", 1L, null, null, avatarUrl);
+
+        assertEquals(avatarUrl, requester.getAvatarUrl());
+        verify(userRepository, times(1)).save(requester);
+    }
+
+    @Test
+    public void updateUserProfile_nullAvatarUrl_avatarNotCleared() {
+        User requester = new User();
+        requester.setId(1L);
+        requester.setToken("valid-token");
+        requester.setUsername("user");
+        requester.setPassword("pw");
+        requester.setStatus(UserStatus.ONLINE);
+        requester.setBio("bio");
+        requester.setCreationDate(Instant.now());
+        requester.setAvatarUrl("https://api.dicebear.com/9.x/lorelei/svg?seed=Tesla");
+
+        when(userRepository.findByToken("valid-token")).thenReturn(requester);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(requester));
+
+        userService.updateUserProfile("valid-token", 1L, null, null, null);
+
+        assertEquals("https://api.dicebear.com/9.x/lorelei/svg?seed=Tesla", requester.getAvatarUrl());
     }
 
     @Test

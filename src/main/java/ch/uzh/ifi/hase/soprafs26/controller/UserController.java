@@ -68,7 +68,8 @@ public class UserController {
                 token,
                 userId,
                 userPutDTO.getUsername(),
-                userPutDTO.getBio()
+                userPutDTO.getBio(),
+                userPutDTO.getAvatarUrl()
         );
     }
 

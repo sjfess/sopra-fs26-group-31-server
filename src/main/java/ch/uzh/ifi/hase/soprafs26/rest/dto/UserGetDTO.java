@@ -17,6 +17,7 @@ public class UserGetDTO {
     private Integer totalPoints;
     private Integer totalCorrectPlacements;
     private Integer totalIncorrectPlacements;
+    private String avatarUrl;
 
     public Long getId() {
         return id;
@@ -97,4 +98,8 @@ public class UserGetDTO {
     public Integer getTotalIncorrectPlacements() { return totalIncorrectPlacements; }
 
     public void setTotalIncorrectPlacements(Integer totalIncorrectPlacements) { this.totalIncorrectPlacements = totalIncorrectPlacements; }
+
+    public String getAvatarUrl() { return avatarUrl; }
+
+    public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
 }
