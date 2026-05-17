@@ -54,7 +54,7 @@ public class Game implements Serializable {
     private String status;
 
     @Column
-    private int maxPlayers = 8;
+    private int maxPlayers = 5;
 
     /**
      * The full deck serialised as a JSON array of objects, each with
