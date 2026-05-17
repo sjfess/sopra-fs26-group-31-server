@@ -12,6 +12,9 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -52,6 +55,7 @@ public class AuthServiceTest {
         assertNotNull(loggedInUser);
         assertEquals("alex", loggedInUser.getUsername());
         assertEquals(UserStatus.ONLINE, loggedInUser.getStatus());
+        assertNotNull(loggedInUser.getLastSeenAt());
 
         verify(userRepository, times(1)).findByUsername("alex");
         verify(userRepository, times(1)).save(testUser);
@@ -114,6 +118,81 @@ public class AuthServiceTest {
 
         assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
         verify(userRepository, times(1)).findByToken("invalid-token");
+        verify(userRepository, never()).save(any(User.class));
+        verify(userRepository, never()).flush();
+    }
+
+    @Test
+    public void heartbeat_validToken_updatesLastSeenAndSetsOnline() {
+        testUser.setStatus(UserStatus.OFFLINE);
+        testUser.setLastSeenAt(Instant.now().minusSeconds(120));
+
+        when(userRepository.findByToken("valid-token")).thenReturn(testUser);
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        authService.heartbeat("valid-token");
+
+        assertEquals(UserStatus.ONLINE, testUser.getStatus());
+        assertNotNull(testUser.getLastSeenAt());
+        assertTrue(testUser.getLastSeenAt().isAfter(Instant.now().minusSeconds(10)));
+        verify(userRepository, times(1)).findByToken("valid-token");
+        verify(userRepository, times(1)).save(testUser);
+        verify(userRepository, times(1)).flush();
+    }
+
+    @Test
+    public void heartbeat_inGameUser_preservesInGameStatus() {
+        testUser.setStatus(UserStatus.IN_GAME);
+
+        when(userRepository.findByToken("valid-token")).thenReturn(testUser);
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        authService.heartbeat("valid-token");
+
+        assertEquals(UserStatus.IN_GAME, testUser.getStatus());
+        assertNotNull(testUser.getLastSeenAt());
+        verify(userRepository, times(1)).save(testUser);
+        verify(userRepository, times(1)).flush();
+    }
+
+    @Test
+    public void heartbeat_invalidToken_throwsUnauthorized() {
+        when(userRepository.findByToken("invalid-token")).thenReturn(null);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> authService.heartbeat("invalid-token")
+        );
+
+        assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode());
+        verify(userRepository, times(1)).findByToken("invalid-token");
+        verify(userRepository, never()).save(any(User.class));
+        verify(userRepository, never()).flush();
+    }
+
+    @Test
+    public void markStaleOnlineUsersOffline_staleUsers_setOffline() {
+        User staleUser = new User();
+        staleUser.setStatus(UserStatus.ONLINE);
+        staleUser.setLastSeenAt(Instant.now().minusSeconds(120));
+
+        when(userRepository.findStaleUsersByStatus(eq(UserStatus.ONLINE), any(Instant.class)))
+                .thenReturn(List.of(staleUser));
+
+        authService.markStaleOnlineUsersOffline();
+
+        assertEquals(UserStatus.OFFLINE, staleUser.getStatus());
+        verify(userRepository, times(1)).save(staleUser);
+        verify(userRepository, times(1)).flush();
+    }
+
+    @Test
+    public void markStaleOnlineUsersOffline_noStaleUsers_doesNothing() {
+        when(userRepository.findStaleUsersByStatus(eq(UserStatus.ONLINE), any(Instant.class)))
+                .thenReturn(List.of());
+
+        authService.markStaleOnlineUsersOffline();
+
         verify(userRepository, never()).save(any(User.class));
         verify(userRepository, never()).flush();
     }

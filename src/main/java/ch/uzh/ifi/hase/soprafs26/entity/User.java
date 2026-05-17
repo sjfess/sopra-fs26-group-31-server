@@ -40,6 +40,9 @@ public class User implements Serializable {
     @Column(nullable = false)
     private Instant creationDate;
 
+    @Column
+    private Instant lastSeenAt;
+
     @Column(nullable = false)
     private Integer totalGamesPlayed = 0;
 
@@ -125,6 +128,14 @@ public class User implements Serializable {
 
     public void setCreationDate(Instant creationDate) {
         this.creationDate = creationDate;
+    }
+
+    public Instant getLastSeenAt() {
+        return lastSeenAt;
+    }
+
+    public void setLastSeenAt(Instant lastSeenAt) {
+        this.lastSeenAt = lastSeenAt;
     }
 
     public Integer getTotalGamesPlayed() {
