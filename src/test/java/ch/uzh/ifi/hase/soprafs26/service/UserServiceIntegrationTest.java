@@ -116,7 +116,7 @@ public class UserServiceIntegrationTest {
 
         User savedUser = userRepository.saveAndFlush(user);
 
-        userService.updateUserProfile("valid-token", savedUser.getId(), "newUsername", "new bio");
+        userService.updateUserProfile("valid-token", savedUser.getId(), "newUsername", "new bio", null);
 
         User updatedUser = userRepository.findById(savedUser.getId()).orElseThrow();
 
@@ -142,7 +142,7 @@ public class UserServiceIntegrationTest {
         User saved = userRepository.saveAndFlush(user);
 
         assertThrows(ResponseStatusException.class, () ->
-                userService.updateUserProfile("wrong-token", saved.getId(), "newName", "new bio"));
+                userService.updateUserProfile("wrong-token", saved.getId(), "newName", "new bio", null));
     }
 
 
