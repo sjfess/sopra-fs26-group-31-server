@@ -163,15 +163,6 @@ public class GameLobbyService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Finished game has no players");
         }
-        List<GamePlayer> activePlayers = oldPlayers.stream()
-                .filter(gp -> gp.getUser().getStatus() == UserStatus.ONLINE)
-                .toList();
-
-        if (activePlayers.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "No active players available for rematch");
-        }
-
 
         boolean requesterWasPlayer = oldPlayers.stream()
                 .anyMatch(gp -> gp.getUser().getId().equals(requestingUserId));
@@ -203,7 +194,7 @@ public class GameLobbyService {
 
         newGame = gameRepository.saveAndFlush(newGame);
 
-        for (GamePlayer oldGp : activePlayers) {
+        for (GamePlayer oldGp : oldPlayers) {
             GamePlayer newGp = new GamePlayer();
             newGp.setGame(newGame);
             newGp.setUser(oldGp.getUser());
