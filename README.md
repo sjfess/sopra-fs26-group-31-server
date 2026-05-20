@@ -3,7 +3,7 @@
 ## Introduction
 
 Historical Reconstruction is a multiplayer web application where players compete by placing historical event cards in the correct chronological order. The backend provides a RESTful API that handles user authentication, game lobby management, real-time game logic, a friend system, a leaderboard, and event card data sourced from the Wikidata SPARQL API. It was developed as part of the Software Engineering Lab (SoPra) at the University of Zurich during the spring semester of 2026.
-## Technologies Used
+## Technologies
 
 - [Spring Boot](https://spring.io/projects/spring-boot), Java backend framework
 - [Java 17](https://www.oracle.com/java/), Programming language
@@ -12,9 +12,9 @@ Historical Reconstruction is a multiplayer web application where players compete
 - [H2](https://www.h2database.com/), In-memory database (local profile only)
 - [PostgreSQL](https://www.postgresql.org/), Relational database (production, hosted on Google Cloud SQL)
 - [Wikidata SPARQL API](https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service), External data source for historical event cards
-- [Docker](https://www.docker.com/), Containerization for deployment
 - [Google App Engine](https://cloud.google.com/appengine), Cloud deployment platform
 - [DiceBear](https://www.dicebear.com/), External source for Avatars
+
 ## High-Level Components
 
 1. **[`GameController.java`](src/main/java/ch/uzh/ifi/hase/soprafs26/controller/GameController.java)** The primary REST controller for all game-related endpoints: creating/joining lobbies, submitting answers, and retrieving game state. Central entry point for the core game flow.
