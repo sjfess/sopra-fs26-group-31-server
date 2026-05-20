@@ -14,7 +14,7 @@ Historical Reconstruction is a multiplayer web application where players compete
 - [Wikidata SPARQL API](https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service), External data source for historical event cards
 - [Docker](https://www.docker.com/), Containerization for deployment
 - [Google App Engine](https://cloud.google.com/appengine), Cloud deployment platform
-
+- [DiceBear](https://www.dicebear.com/), External source for Avatars
 ## High-Level Components
 
 1. **[`GameController.java`](src/main/java/ch/uzh/ifi/hase/soprafs26/controller/GameController.java)** The primary REST controller for all game-related endpoints: creating/joining lobbies, submitting answers, and retrieving game state. Central entry point for the core game flow.
