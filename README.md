@@ -1,118 +1,150 @@
-# SoPra RESTful Service Template FS26
-fds
-## Getting started with Spring Boot
--   Documentation: https://docs.spring.io/spring-boot/docs/current/reference/html/index.html
--   Guides: http://spring.io/guides
-    -   Building a RESTful Web Service: http://spring.io/guides/gs/rest-service/
-    -   Building REST services with Spring: https://spring.io/guides/tutorials/rest/
+# Historical Reconstruction
 
-## Setup this Template with your IDE of choice
-Download your IDE of choice (e.g., [IntelliJ](https://www.jetbrains.com/idea/download/), [Visual Studio Code](https://code.visualstudio.com/), or [Eclipse](http://www.eclipse.org/downloads/)). Make sure Java 17 is installed on your system (for Windows, please make sure your `JAVA_HOME` environment variable is set to the correct version of Java).
+## Introduction
+
+Historical Reconstruction is a multiplayer web application where players compete by placing historical event cards in the correct chronological order. The backend provides a RESTful API that handles user authentication, game lobby management, real-time game logic, a friend system, a leaderboard, and event card data sourced from the Wikidata SPARQL API. It was developed as part of the Software Engineering Lab (SoPra) at the University of Zurich during the spring semester of 2026.
+## Technologies Used
+
+- [Spring Boot](https://spring.io/projects/spring-boot), Java backend framework
+- [Java 17](https://www.oracle.com/java/), Programming language
+- [Gradle](https://gradle.org/), Build tool
+- [JPA / Hibernate](https://hibernate.org/), ORM for database access
+- [H2](https://www.h2database.com/), In-memory database (local profile only)
+- [PostgreSQL](https://www.postgresql.org/), Relational database (production, hosted on Google Cloud SQL)
+- [Wikidata SPARQL API](https://www.wikidata.org/wiki/Wikidata:SPARQL_query_service), External data source for historical event cards
+- [Docker](https://www.docker.com/), Containerization for deployment
+- [Google App Engine](https://cloud.google.com/appengine), Cloud deployment platform
+
+## High-Level Components
+
+1. **[`GameController.java`](src/main/java/ch/uzh/ifi/hase/soprafs26/controller/GameController.java)** The primary REST controller for all game-related endpoints: creating/joining lobbies, submitting answers, and retrieving game state. Central entry point for the core game flow.
+2. **[`TimelineGameService.java`](src/main/java/ch/uzh/ifi/hase/soprafs26/service/TimelineGameService.java)** The largest and most complex service class. Contains the core game logic: evaluating player card placements on the timeline, computing scores, and advancing rounds.
+3. **[`GameLobbyService.java`](src/main/java/ch/uzh/ifi/hase/soprafs26/service/GameLobbyService.java)** Manages the lobby lifecycle: player joining, readiness, game configuration, and transitioning from lobby to active game. Works closely with [`GameStartService.java`](src/main/java/ch/uzh/ifi/hase/soprafs26/service/GameStartService.java).
+4. **[`WikidataService.java`](src/main/java/ch/uzh/ifi/hase/soprafs26/service/WikidataService.java)** Fetches and parses historical event data from the external Wikidata API to populate [`EventCard`](src/main/java/ch/uzh/ifi/hase/soprafs26/entity/EventCard.java) objects used during gameplay. The primary external dependency.
+5. **[`AuthService.java`](src/main/java/ch/uzh/ifi/hase/soprafs26/service/AuthService.java)** Handles user registration and login, token issuance, and authentication validation for protected endpoints. Works alongside [`UserService.java`](src/main/java/ch/uzh/ifi/hase/soprafs26/service/UserService.java) for user profile management.
+## Launch & Deployment
+
+### Prerequisites
+
+- Java 17 (`java-version`)
+- Git
 
 ### IntelliJ
-If you consider to use IntelliJ as your IDE of choice, you can make use of your free educational license [here](https://www.jetbrains.com/community/education/#students).
-1. File -> Open... -> SoPra server template
+
+1. **File → Open** the project folder
 2. Accept to import the project as a `gradle project`
 3. To build right click the `build.gradle` file and choose `Run Build`
 
 ### VS Code
+
 The following extensions can help you get started more easily:
--   `vmware.vscode-spring-boot`
--   `vscjava.vscode-spring-initializr`
--   `vscjava.vscode-spring-boot-dashboard`
--   `vscjava.vscode-java-pack`
 
-**Note:** You'll need to build the project first with Gradle, just click on the `build` command in the _Gradle Tasks_ extension. Then check the _Spring Boot Dashboard_ extension if it already shows `soprafs26` and hit the play button to start the server. If it doesn't show up, restart VS Code and check again.
+-   `vmware.vscode-spring-boot`
+-   `vscjava.vscode-spring-initializr`
+-   `vscjava.vscode-spring-boot-dashboard`
+-   `vscjava.vscode-java-pack`
 
-## Building with Gradle
+>**Note:** You'll need to build the project first with Gradle, just click on the `build` command in the _Gradle Tasks_ extension. Then check the _Spring Boot Dashboard_ extension if it already shows `soprafs26` and hit the play button to start the server. If it doesn't show up, restart VS Code and check again.
+
+### Building with Gradle
+
 You can use the local Gradle Wrapper to build the application.
--   macOS: `./gradlew`
--   Linux: `./gradlew`
--   Windows: `./gradlew.bat`
+
+-   macOS: `./gradlew`
+-   Linux: `./gradlew`
+-   Windows: `./gradlew.bat`
 
 More Information about [Gradle Wrapper](https://docs.gradle.org/current/userguide/gradle_wrapper.html) and [Gradle](https://gradle.org/docs/).
 
-### Build
+#### Build
 
 ```bash
 ./gradlew build
 ```
 
-### Run
+#### Run
 
 ```bash
-./gradlew bootRun
+./gradlew bootRun --args='--spring.profiles.active=local'
 ```
-
 You can verify that the server is running by visiting `localhost:8080` in your browser.
 
-### Test
+> **Note:** Always use the `local` Spring profile when running locally. Without it, the server
+> will attempt to connect to the production PostgreSQL database on Google Cloud SQL, which
+> requires credentials not available in a local environment.
+
+#### Test
 
 ```bash
 ./gradlew test
 ```
 
+Test coverage is tracked via [SonarQube](https://sonarcloud.io/). The project targets ≥75% coverage.
 ### Development Mode
-You can start the backend in development mode, this will automatically trigger a new build and reload the application
-once the content of a file has been changed.
 
-Start two terminal windows and run:
+You can start the backend in development mode, this will automatically trigger a new build and reload the application once the content of a file has been changed.
 
-`./gradlew build --continuous`
+Start two separate terminal windows and run:
 
-and in the other one:
+```bash
+./gradlew build --continuous
+```
 
-`./gradlew bootRun`
+```bash
+./gradlew bootRun --args='--spring.profiles.active=local'
+```
 
-If you want to avoid running all tests with every change, use the following command instead:
+If you don't want to run all tests with every change, use the following command instead:
 
-`./gradlew build --continuous -xtest`
+```bash
+./gradlew build --continuous -xtest
+```
+### Production Database
 
-## API Endpoint Testing with Postman
-We recommend using [Postman](https://www.getpostman.com) to test your API Endpoints.
+In production (Google App Engine), the server connects to a **PostgreSQL** database hosted on Google Cloud SQL (`sopra-fs26-group-31-server:europe-west6:sopra-fs26-group-31-db`). The database password is injected at deploy time via the `DB_PASSWORD` GitHub secret and the `app.yaml` environment variables. No manual database setup is needed for deployment.
+### Deployment (Google App Engine)
 
-## Debugging
-If something is not working and/or you don't know what is going on. We recommend using a debugger and step-through the process step-by-step.
+All pushes to `main` automatically trigger the deployment workflow in
 
-To configure a debugger for SpringBoot's Tomcat servlet (i.e. the process you start with `./gradlew bootRun` command), do the following:
+[`.github/workflows/main.yml`](.github/workflows/main.yml), which:
 
-1. Open Tab: **Run**/Edit Configurations
-2. Add a new Remote Configuration and name it properly
-3. Start the Server in Debug mode: `./gradlew bootRun --debug-jvm`
-4. Press `Shift + F9` or the use **Run**/Debug "Name of your task"
-5. Set breakpoints in the application where you need it
-6. Step through the process one step at a time
+1. Runs tests and SonarQube analysis
+2. Injects the `DB_PASSWORD` secret into `app.yaml`
+3. Deploys to Google App Engine
 
-## Testing
-Have a look here: https://www.baeldung.com/spring-boot-testing
+The live server is available at:
 
-<br>
-<br>
-<br>
+**https://sopra-fs26-group-31-server.oa.r.appspot.com/**
 
-## Docker
+To trigger a release manually, push a tagged commit to `main`:
 
-### Introduction
-This year Docker will be used to ease the process of deployment.\
-Docker is a tool that uses containers as isolated environments, ensuring that the application runs consistently and uniformly across different devices.\
-Everything in this repository is already set up to minimize your effort for deployment.\
-All changes to the main branch will automatically be pushed to dockerhub and optimized for production.
+```bash
+git tag M#
+git push origin M#
+```
 
-### Setup
-1. **One** member of the team should create an account on [dockerhub](https://hub.docker.com/), _incorporating the group number into the account name_, for example, `SoPra_group_XX`.\
-2. This account then creates a repository on dockerhub with the _same name as the group's Github repository name_.\
-3. Finally, the person's account details need to be added as [secrets](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions#creating-secrets-for-a-repository) to the group's repository:
-    - dockerhub_username (the username of the dockerhub account from step 1, for example, `SoPra_group_XX`)
-    - dockerhub_password (a generated PAT([personal access token](https://docs.docker.com/docker-hub/access-tokens/)) of the account with read and write access)
-    - dockerhub_repo_name (the name of the dockerhub repository from step 2)
+Ensure the following GitHub repository secrets are configured:
+- `GCP_SERVICE_CREDENTIALS`
+- `DB_PASSWORD`
+- `SONAR_TOKEN`
 
-### Pull and run
-Once the image is created and has been successfully pushed to dockerhub, the image can be run on any machine.\
-Ensure that [Docker](https://www.docker.com/) is installed on the machine you wish to run the container.\
-First, pull (download) the image with the following command, replacing your username and repository name accordingly.
+## Roadmap
 
-```docker pull <dockerhub_username>/<dockerhub_repo_name>```
+Top features that new contributors could add:
 
-Then, run the image in a container with the following command, again replacing _<dockerhub_username>_ and _<dockerhub_repo_name>_ accordingly.
 
-```docker run -p 3000:3000 <dockerhub_username>/<dockerhub_repo_name>```
+1. **WebSocket / SSE for real-time updates**: Replace the current polling-based approach with WebSockets or Server-Sent Events so game state pushes to all players instantly without repeated client requests.
+2. **Expanded Wikidata categories**: Extend `WikidataService.java` to support additional historical domains (science, sports, geography) so players can choose a category before starting a game.
+3. **Persistent leaderboard with seasons**: Upgrade the `LeaderboardService.java` to support seasonal resets and historical stats backed by the existing production PostgreSQL database.
+## Authors and Acknowledgment
+
+- Alex Wimmer ([AlexWimmer 1](https://github.com/AlexWimmer1))
+- Arthur Maximilian Sandor Csaky-Pallavicini ([milchazor](https://github.com/milchazor))
+- Colin Kreienbühl ([Fanelock](https://github.com/Fanelock))
+- Marco Büchel ([marcokingo](https://github.com/marcokingo))
+- Samuel Jonas Fessler ([sjfess](https://github.com/sjfess))
+
+We thank our TA and the Software Engineering Lab teaching team for their guidance throughout the course.
+## License
+
+This project is licensed under the [Apache License 2.0](LICENSE).
