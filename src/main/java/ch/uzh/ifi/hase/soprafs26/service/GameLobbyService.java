@@ -159,11 +159,19 @@ public class GameLobbyService {
         }
 
         List<GamePlayer> oldPlayers = gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(oldGame);
-
         if (oldPlayers.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Finished game has no players");
         }
+        List<GamePlayer> activePlayers = oldPlayers.stream()
+                .filter(gp -> gp.getUser().getStatus() == UserStatus.ONLINE)
+                .toList();
+
+        if (activePlayers.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "No active players available for rematch");
+        }
+
 
         boolean requesterWasPlayer = oldPlayers.stream()
                 .anyMatch(gp -> gp.getUser().getId().equals(requestingUserId));
@@ -173,7 +181,6 @@ public class GameLobbyService {
                     "Only players from the finished game can create a rematch");
         }
 
-        // Wichtig: falls schon ein Rematch existiert, dieses zurückgeben
         Optional<Game> existingRematch =
                 gameRepository.findByRematchFromGameIdAndStatus(oldGame.getId(), "WAITING");
         if (existingRematch.isPresent()) {
@@ -196,7 +203,7 @@ public class GameLobbyService {
 
         newGame = gameRepository.saveAndFlush(newGame);
 
-        for (GamePlayer oldGp : oldPlayers) {
+        for (GamePlayer oldGp : activePlayers) {
             GamePlayer newGp = new GamePlayer();
             newGp.setGame(newGame);
             newGp.setUser(oldGp.getUser());
@@ -292,7 +299,10 @@ public class GameLobbyService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Game with lobby code " + lobbyCode + " not found"));
 
-        if (!"WAITING".equals(game.getStatus()) && !"IN_PROGRESS".equals(game.getStatus())) {
+        if (!"WAITING".equals(game.getStatus())
+                && !"IN_PROGRESS".equals(game.getStatus())
+                && !"FINISHED".equals(game.getStatus())
+        ) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Cannot leave a game with status " + game.getStatus());
         }
@@ -305,13 +315,31 @@ public class GameLobbyService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND,
                     "User is not part of this game");
         }
+        if ("FINISHED".equals(game.getStatus())) {
+            user.setStatus(UserStatus.ONLINE);
+            userRepository.save(user);
+            gamePlayerRepository.deleteByGameAndUser(game, user);
+            gamePlayerRepository.flush();
+
+            if (game.getHostId().equals(user.getId())) {
+                List<GamePlayer> remaining =
+                        gamePlayerRepository.findAllByGameOrderByTurnOrderAsc(game);
+                if (!remaining.isEmpty()) {
+                    game.setHostId(remaining.get(0).getUser().getId());
+                    gameRepository.save(game);
+                }
+                else {
+                    deleteFinishedGameInternal(game);
+                }
+            }
+            return;
+        }
 
         if ("IN_PROGRESS".equals(game.getStatus())) {
             leaveInProgressGame(game, user);
             return;
         }
 
-        // WAITING: existing lobby-leave logic
         user.setStatus(UserStatus.ONLINE);
         userRepository.save(user);
 
