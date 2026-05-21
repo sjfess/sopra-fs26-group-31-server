@@ -145,6 +145,7 @@ Top features that new contributors could add:
 - Samuel Jonas Fessler ([sjfess](https://github.com/sjfess))
 
 We thank our TA and the Software Engineering Lab teaching team for their guidance throughout the course.
+
 ## License
 
-This project is licensed under the [Apache License 2.0](LICENSE).
+This project is licensed under the Apache License 2.0. See the [LICENSE](https://github.com/sjfess/sopra-fs26-group-31-server/blob/main/LICENSE) file for details.
