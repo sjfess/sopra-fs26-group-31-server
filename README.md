@@ -147,5 +147,5 @@ Top features that new contributors could add:
 We thank our TA and the Software Engineering Lab teaching team for their guidance throughout the course.
 
 ## License
-
+Copyright 2026 Sopra-FS26-Group-31
 This project is licensed under the Apache License 2.0. See the [LICENSE](https://github.com/sjfess/sopra-fs26-group-31-server/blob/main/LICENSE) file for details.
