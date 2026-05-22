@@ -510,4 +510,22 @@ public class GameControllerTest {
                 .andExpect(status().isNoContent());
         verify(gameService).deleteInvite(42L);
     }
+
+    @Test
+    public void revealCard_validInput_returnsRevealedCard() throws Exception {
+        EventCard card = new EventCard();
+        card.setId(10L);
+        card.setTitle("Moon Landing");
+        card.setYear(1969);
+        card.setImageUrl("https://example.com/moon.jpg");
+
+        given(gameService.getCard(1L, 0)).willReturn(card);
+
+        mockMvc.perform(get("/games/1/cards/0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id", is(10)))
+                .andExpect(jsonPath("$.title", is("Moon Landing")))
+                .andExpect(jsonPath("$.year", is(1969)))
+                .andExpect(jsonPath("$.imageUrl", is("https://example.com/moon.jpg")));
+    }
 }
